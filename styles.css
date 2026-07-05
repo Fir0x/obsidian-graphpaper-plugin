@@ -1,0 +1,7 @@
+.mathplot-error {
+	color: red;
+}
+
+.mathplot-error span {
+	white-space: pre-wrap;
+}
