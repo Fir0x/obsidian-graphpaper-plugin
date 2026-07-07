@@ -11,7 +11,7 @@ import {
 } from './settings';
 
 import * as Plotly from 'plotly.js-dist-min';
-import MathInterpreter from './math_interpreter';
+import MathInterpreter from './interpreter';
 
 type PlotInfo = {
 	xMin: number,
