@@ -11,6 +11,8 @@ import {
 } from './settings';
 
 import * as Plotly from 'plotly.js-dist-min';
+import { LexerError, TokenType } from './lexer';
+import { ParserError } from './parser';
 import MathInterpreter from './interpreter';
 
 type PlotInfo = {
@@ -52,6 +54,57 @@ function parse(source: string) {
 	return infos as PlotInfo;
 }
 
+function displayError(error: any, container: HTMLDivElement) {
+	let message: [string, boolean][] = [['MathPlot error:\n', true]];
+	if (error instanceof LexerError) {
+		message.push([error.message + '\nHint: ' + error.source.slice(0, error.index), false]);
+		message.push([error.source[error.index]!, true]);
+		message.push([error.source.slice(error.index + 1), false]);
+	} else if (error instanceof ParserError) {
+		let messagePart = error.message + '\nHint: [';
+
+		for (let i = 0; i < error.tokens.length; i++) {
+			const token = error.tokens[i]!;
+			let tokenStr = '';
+			switch (token.type) {
+				case TokenType.Identifier: tokenStr += token.value; break;
+				case TokenType.Literal: tokenStr += token.value; break;
+				case TokenType.Plus: tokenStr += '+'; break;
+				case TokenType.Minus: tokenStr += '-'; break;
+				case TokenType.Star: tokenStr += '*'; break;
+				case TokenType.Slash: tokenStr += '/'; break;
+				case TokenType.Caret: tokenStr += '^'; break;
+				case TokenType.LeftParen: tokenStr += '('; break;
+				case TokenType.RightParen: tokenStr += ')'; break;
+			}
+
+			if (i == error.index) {
+				message.push([messagePart, false]);
+				message.push([`'${tokenStr}'`, true]);
+				messagePart = '';
+			} else {
+				messagePart += `'${tokenStr}'`;
+			}
+
+			if (i < error.tokens.length - 1) {
+				messagePart += ' | ';
+			}
+		}
+
+		message.push([messagePart + ']', false]);
+	} else {
+		message.push(['[Dev error] ' + (error instanceof Error ? error.message : String(error)), false]);
+	}
+
+	for (const messagePart of message) {
+		if (messagePart[1]) {
+			container.createSpan({ text: messagePart[0]!, cls: 'mathplot-error', attr: { id: 'notice' } });
+		} else {
+			container.createSpan({ text: messagePart[0], cls: 'mathplot-error' });
+		}
+	}
+}
+
 export default class MathplotPlugin extends Plugin {
 	plotDivs!: HTMLDivElement[];
 	settings!: MathplotPluginSettings;
@@ -76,10 +129,8 @@ export default class MathplotPlugin extends Plugin {
 					}
 				})(plotDiv));
 			} catch (error) {
-				const message = (error instanceof Error) ? error.message : String(error);
 				const container = el.createDiv({ cls: 'mathplot-error' });
-				container.createEl('strong', { text: 'MathPlot error: ' });
-				container.createEl('span', { text: message });
+				displayError(error, container)
 			}
 		});
 	}

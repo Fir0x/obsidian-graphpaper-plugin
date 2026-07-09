@@ -29,12 +29,23 @@ export type Token =
 	| TokenLiteral
 	| TokenOp;
 
+export class LexerError extends SyntaxError {
+	source: string;
+	index: number;
 
-export function lexMathExpr(expr: string) {
+	constructor(message: string, source: string, index: number) {
+		super(message);
+
+		this.source = source;
+		this.index = index;
+	}
+}
+
+export function lexMathExpr(source: string) {
 	let tokens: Token[] = []
 	let i = 0;
-	while (i < expr.length) {
-		const c = expr[i]!;
+	while (i < source.length) {
+		const c = source[i]!;
 
 		if (/\s/.test(c)) {
 			i++;
@@ -44,10 +55,10 @@ export function lexMathExpr(expr: string) {
 		if (/[\d\.]/.test(c)) {
 			let literalEnd = i + 1;
 			let floatingPointFound = c === '.';
-			while (literalEnd < expr.length && /[\d\.]/.test(expr[literalEnd]!)) {
-				if (expr[literalEnd] === '.') {
+			while (literalEnd < source.length && /[\d\.]/.test(source[literalEnd]!)) {
+				if (source[literalEnd] === '.') {
 					if (floatingPointFound) {
-						throw SyntaxError(`Multiple floating part detected at position ${literalEnd} for number.`);
+						throw new LexerError(`Multiple floating part detected at position ${literalEnd} for number.`, source, i);
 					} else {
 						floatingPointFound = true;
 					}
@@ -55,7 +66,7 @@ export function lexMathExpr(expr: string) {
 				literalEnd++;
 			}
 
-			const literalStr = expr.substring(i, literalEnd);
+			const literalStr = source.substring(i, literalEnd);
 			tokens.push({ type: TokenType.Literal, value: +literalStr });
 			i = literalEnd;
 			continue;
@@ -63,11 +74,11 @@ export function lexMathExpr(expr: string) {
 
 		if (/[A-Za-z]/.test(c)) {
 			let identifierEnd = i;
-			while (identifierEnd < expr.length && /[A-Za-z]/.test(expr[identifierEnd]!)) {
+			while (identifierEnd < source.length && /[A-Za-z]/.test(source[identifierEnd]!)) {
 				identifierEnd++;
 			}
 
-			const identifier = expr.substring(i, identifierEnd);
+			const identifier = source.substring(i, identifierEnd);
 			tokens.push({ type: TokenType.Identifier, value: identifier });
 			i = identifierEnd;
 			continue;
@@ -81,7 +92,7 @@ export function lexMathExpr(expr: string) {
 			case '^': tokens.push({ type: TokenType.Caret }); break;
 			case '(': tokens.push({ type: TokenType.LeftParen }); break;
 			case ')': tokens.push({ type: TokenType.RightParen }); break;
-			default: throw new SyntaxError(`Unexpected character ${c} at position ${i}.`);
+			default: throw new LexerError(`Unexpected character ${c} at position ${i}.`, source, i);
 		}
 
 		i++;

@@ -1,4 +1,4 @@
-import * as Lexer from './lexer'
+import * as Lexer from './lexer';
 
 export enum AstNodeType {
 	Identifier,
@@ -26,6 +26,17 @@ export type AstNode =
 	| { type: AstNodeType.BinaryOp, opType: BinaryOp, left: AstNode, right: AstNode }
 	| { type: AstNodeType.UnaryOp, opType: UnaryOp, right: AstNode };
 
+export class ParserError extends SyntaxError {
+	tokens: Lexer.Token[];
+	index: number;
+
+	constructor(message: string, tokens: Lexer.Token[], index: number) {
+		super(message);
+
+		this.tokens = tokens;
+		this.index = index;
+	}
+}
 
 export class MathParser {
 	private tokens: Lexer.Token[];
@@ -40,7 +51,7 @@ export class MathParser {
 		this.index = 0;
 		const result = this.parseAddSub();
 		if (this.index < this.tokens.length) {
-			this.throwSyntaxError('Unexpected token');
+			this.throwSyntaxError(`End of expression expected, but ${this.tokens.length - this.index} tokens remaining.`, this.index - 1);
 		}
 
 		return result;
@@ -123,7 +134,7 @@ export class MathParser {
 				return exprNode;
 			}
 
-			this.throwSyntaxError('Missing closing parenthesis found');
+			this.throwSyntaxError('Missing closing parenthesis found', this.index);
 		}
 
 		if (token.type == Lexer.TokenType.Identifier) {
@@ -134,32 +145,10 @@ export class MathParser {
 			return { type: AstNodeType.Literal, value: (token as Lexer.TokenLiteral).value };
 		}
 
-		this.throwSyntaxError('Unexpected token');
+		this.throwSyntaxError('Unexpected token', this.index - 1);
 	}
 
-	private throwSyntaxError(errorType: string): never {
-		let errorMessage = errorType + ` at index ${this.index}.\nExpression is currently parsed as follow:\n`
-		for (let i = 0; i < this.tokens.length; i++) {
-			const token = this.tokens[i]!;
-			let tokenStr = '';
-			switch (token.type) {
-				case Lexer.TokenType.Identifier: tokenStr += token.value; break;
-				case Lexer.TokenType.Literal: tokenStr += token.value; break;
-				case Lexer.TokenType.Plus: tokenStr += '+'; break;
-				case Lexer.TokenType.Minus: tokenStr += '-'; break;
-				case Lexer.TokenType.Star: tokenStr += '*'; break;
-				case Lexer.TokenType.Slash: tokenStr += '/'; break;
-				case Lexer.TokenType.Caret: tokenStr += '^'; break;
-				case Lexer.TokenType.LeftParen: tokenStr += '('; break;
-				case Lexer.TokenType.RightParen: tokenStr += ')'; break;
-			}
-
-			errorMessage += tokenStr;
-			if (i < this.tokens.length - 1) {
-				errorMessage += ' | ';
-			}
-		}
-
-		throw new SyntaxError(errorMessage);
+	private throwSyntaxError(errorType: string, index: number): never {
+		throw new ParserError(`${errorType} at index ${this.index}.`, this.tokens, index);
 	}
 }
