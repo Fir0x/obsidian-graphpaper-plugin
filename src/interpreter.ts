@@ -1,7 +1,13 @@
 import { lexMathExpr } from './lexer';
 import * as Parser from './parser';
 
-export default class MathInterpreter {
+export class InterpreterError extends SyntaxError {
+	constructor(message: string) {
+		super(message);
+	}
+}
+
+export class MathInterpreter {
 	interpret(expr: string, xValues: number[]) {
 		let tokens = lexMathExpr(expr);
 		let parser = new Parser.MathParser(tokens);
@@ -20,7 +26,14 @@ export default class MathInterpreter {
 			case Parser.AstNodeType.Literal:
 				return node.value;
 			case Parser.AstNodeType.Identifier:
-				return this.resolveIdentifier(node.name, x)!;
+				return this.resolveValueIdentifier(node.name, x)!;
+			case Parser.AstNodeType.Call:
+				let evaluatedArgs: number[] = [];
+				for (const argNode of node.args) {
+					evaluatedArgs.push(this.evaluateAst(argNode, x));
+				}
+
+				return this.resolveCallIdentifier(node.identifier)(...evaluatedArgs);
 			case Parser.AstNodeType.BinaryOp: {
 				const left = this.evaluateAst(node.left, x);
 				const right = this.evaluateAst(node.right, x);
@@ -41,12 +54,26 @@ export default class MathInterpreter {
 		}
 	}
 
-	private resolveIdentifier(identifier: string, x: number) {
+	private resolveValueIdentifier(identifier: string, x: number) {
 		switch (identifier) {
 			case 'x': return x;
 			case 'e': return Math.E;
 			case 'pi': return Math.PI;
-			default: throw new SyntaxError(`Unknown identifier '${identifier}'.`)
+			default: throw new InterpreterError(`Unknown identifier '${identifier}'.`)
+		}
+	}
+
+	private resolveCallIdentifier(identifier: string): (...x: number[]) => number {
+		switch (identifier) {
+			case 'sqrt': return Math.sqrt;
+			case 'log': return Math.log;
+			case 'cos': return Math.cos;
+			case 'acos': return Math.acos;
+			case 'sin': return Math.sin;
+			case 'asin': return Math.asin;
+			case 'tan': return Math.tan;
+			case 'atan': return Math.atan;
+			default: throw new InterpreterError(`Unknown identifier '${identifier}'.`)
 		}
 	}
 }

@@ -24,7 +24,8 @@ export type AstNode =
 	| { type: AstNodeType.Identifier, name: string }
 	| { type: AstNodeType.Literal, value: number }
 	| { type: AstNodeType.BinaryOp, opType: BinaryOp, left: AstNode, right: AstNode }
-	| { type: AstNodeType.UnaryOp, opType: UnaryOp, right: AstNode };
+	| { type: AstNodeType.UnaryOp, opType: UnaryOp, right: AstNode }
+	| { type: AstNodeType.Call, identifier: string, args: AstNode[] };
 
 export class ParserError extends SyntaxError {
 	tokens: Lexer.Token[];
@@ -138,7 +139,24 @@ export class MathParser {
 		}
 
 		if (token.type == Lexer.TokenType.Identifier) {
-			return { type: AstNodeType.Identifier, name: token.value };
+			const identifierName = token.value;
+
+			if (this.tokens[this.index]?.type == Lexer.TokenType.LeftParen) {
+				++this.index;
+				let args = [];
+				do {
+					args.push(this.parseAddSub());
+				} while (this.tokens[this.index]?.type == Lexer.TokenType.Comma);
+
+				if (this.tokens[this.index]?.type == Lexer.TokenType.RightParen) {
+					++this.index;
+					return { type: AstNodeType.Call, identifier: identifierName, args: args };
+				}
+
+				this.throwSyntaxError('Missing closing parenthesis found', this.index);
+			}
+
+			return { type: AstNodeType.Identifier, name: identifierName };
 		}
 
 		if (token.type == Lexer.TokenType.Literal) {

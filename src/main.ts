@@ -13,7 +13,7 @@ import {
 import * as Plotly from 'plotly.js-dist-min';
 import { LexerError, TokenType } from './lexer';
 import { ParserError } from './parser';
-import MathInterpreter from './interpreter';
+import { MathInterpreter, InterpreterError } from './interpreter';
 
 type PlotInfo = {
 	xMin: number,
@@ -92,6 +92,8 @@ function displayError(error: any, container: HTMLDivElement) {
 		}
 
 		message.push([messagePart + ']', false]);
+	} else if (error instanceof InterpreterError) {
+		message.push([error.message, false]);
 	} else {
 		message.push(['[Dev error] ' + (error instanceof Error ? error.message : String(error)), false]);
 	}

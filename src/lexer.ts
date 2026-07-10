@@ -8,6 +8,7 @@ export enum TokenType {
 	Caret,
 	LeftParen,
 	RightParen,
+	Comma
 }
 
 export type TokenIdentifier = {
@@ -21,7 +22,7 @@ export type TokenLiteral = {
 }
 
 export type TokenOp = {
-	type: TokenType.Plus | TokenType.Minus | TokenType.Star | TokenType.Slash | TokenType.Caret | TokenType.LeftParen | TokenType.RightParen
+	type: TokenType.Plus | TokenType.Minus | TokenType.Star | TokenType.Slash | TokenType.Caret | TokenType.LeftParen | TokenType.RightParen | TokenType.Comma
 }
 
 export type Token =
@@ -92,6 +93,7 @@ export function lexMathExpr(source: string) {
 			case '^': tokens.push({ type: TokenType.Caret }); break;
 			case '(': tokens.push({ type: TokenType.LeftParen }); break;
 			case ')': tokens.push({ type: TokenType.RightParen }); break;
+			case ',': tokens.push({ type: TokenType.Comma }); break;
 			default: throw new LexerError(`Unexpected character ${c} at position ${i}.`, source, i);
 		}
 
