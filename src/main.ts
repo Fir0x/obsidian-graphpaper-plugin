@@ -14,44 +14,50 @@ import * as Plotly from 'plotly.js-dist-min';
 import { LexerError, TokenType } from './lexer';
 import { ParserError } from './parser';
 import { MathInterpreter, InterpreterError } from './interpreter';
+import { z } from 'zod';
+
+const plotInfoSchema = z.strictObject({
+	xMin: z.number(),
+	xMax: z.number(),
+	sampleCount: z.number(),
+	function: z.coerce.string(),
+	view: z.strictObject({
+		xMin: z.number().optional(),
+		xMax: z.number().optional(),
+		yMin: z.number().optional(),
+		yMax: z.number().optional(),
+	}).optional(),
+});
 
 type PlotInfo = {
 	xMin: number,
 	xMax: number,
 	sampleCount: number,
-	mathFunc: string
+	mathFunc: string,
+	view?: {
+		xMin?: number,
+		xMax?: number,
+		yMin?: number,
+		yMax?: number,
+	},
 }
 
 function parse(source: string) {
 	const yaml = parseYaml(source);
-	const checkMandatoryField = (field: string, types: string | string[]) => {
-		if (!yaml.hasOwnProperty(field)) {
-			throw new SyntaxError(`Missing field '${field}' in code block.`);
-		}
 
-		if (typeof types === 'string') {
-			types = [types];
-		}
+	const zodResult = plotInfoSchema.safeParse(yaml);
+	if (!zodResult.success) {
+		const msg = zodResult.error.issues
+			.map(issue => `'${issue.path.join('.')}': ${issue.message}`)
+			.join('\n');
+		throw new SyntaxError(msg);
+	}
 
-		const fieldType = typeof yaml[field];
-		if (!types.includes(fieldType)) {
-			throw new SyntaxError(`Field '${field}' type is '${fieldType}', but must be one of the following types: ${types.join(', ')}.`);
-		}
-	};
-
-	checkMandatoryField('xMin', 'number');
-	checkMandatoryField('xMax', 'number');
-	checkMandatoryField('sampleCount', 'number');
-	checkMandatoryField('function', ['string', 'number']);
-
-	const infos = {
-		xMin: yaml.xMin,
-		xMax: yaml.xMax,
-		sampleCount: yaml.sampleCount,
-		mathFunc: typeof (yaml.function) === 'number' ? (yaml.function as number).toString() : yaml.function
-	};
-
-	return infos as PlotInfo;
+	const { function: mathFunc, ...rest } = zodResult.data;
+	return {
+		...rest,
+		mathFunc
+	} as PlotInfo;
 }
 
 function displayError(error: any, container: HTMLDivElement) {
@@ -157,6 +163,32 @@ export default class MathplotPlugin extends Plugin {
 		const xValues = Array.from({ length: infos.sampleCount + 1 }, (_, i) => infos.xMin + i * sampleOffset);
 		const yValues = new MathInterpreter().interpret(infos.mathFunc, xValues);
 
+		let layout: Partial<Plotly.Layout> = {
+			margin: { t: 20 },
+		};
+
+		if (infos.view) {
+			if (typeof infos.view.xMin !== 'undefined' || typeof infos.view.xMax !== 'undefined') {
+				const xMin = typeof infos.view.xMin === 'undefined' ? xValues.reduce((min, value) => value < min ? value : min) : infos.view.xMin;
+				const xMax = typeof infos.view.xMax === 'undefined' ? xValues.reduce((max, value) => value > max ? value : max) : infos.view.xMax;
+				layout.xaxis = {
+					range: [xMin, xMax]
+				};
+			}
+
+			if (typeof infos.view.yMin !== 'undefined' || typeof infos.view.yMax !== 'undefined') {
+				const yMin = typeof infos.view.yMin === 'undefined' ? yValues.reduce((min, value) => value < min ? value : min) : infos.view.yMin;
+				const yMax = typeof infos.view.yMax === 'undefined' ? yValues.reduce((max, value) => value > max ? value : max) : infos.view.yMax;
+				layout.yaxis = {
+					range: [yMin, yMax]
+				};
+			}
+		}
+
+		let config: Partial<Plotly.Config> = {
+			responsive: true,
+		};
+
 		Plotly.newPlot(container, [{
 			x: xValues,
 			y: yValues,
@@ -165,11 +197,7 @@ export default class MathplotPlugin extends Plugin {
 			line: {
 				dash: this.settings.curveLineType,
 			}
-		}], {
-			margin: { t: 20 }
-		}, {
-			responsive: true
-		});
+		}], layout, config);
 
 		return container;
 	}
