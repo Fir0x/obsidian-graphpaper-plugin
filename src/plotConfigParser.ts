@@ -1,11 +1,16 @@
 import { parseYaml } from 'obsidian';
 import { z } from 'zod';
 
-const plotInfoSchema = z.strictObject({
+const functionConfigSchema = z.array(z.strictObject({
+	name: z.string(),
+	def: z.coerce.string()
+})).or(z.coerce.string());
+
+const plotConfigSchema = z.strictObject({
 	xMin: z.number(),
 	xMax: z.number(),
 	sampleCount: z.number(),
-	function: z.coerce.string(),
+	functions: functionConfigSchema,
 	options: z.strictObject({
 		view: z.strictObject({
 			xMin: z.number().optional(),
@@ -16,11 +21,16 @@ const plotInfoSchema = z.strictObject({
 	}).optional(),
 });
 
+export type FunctionConfig = {
+	name: string,
+	def: string
+}
+
 export type PlotConfig = {
 	xMin: number,
 	xMax: number,
 	sampleCount: number,
-	mathFunc: string,
+	functions: FunctionConfig[],
 	options?: {
 		view?: {
 			xMin?: number,
@@ -34,7 +44,7 @@ export type PlotConfig = {
 export function parsePlotConfig(source: string) {
 	const yaml = parseYaml(source);
 
-	const zodResult = plotInfoSchema.safeParse(yaml);
+	const zodResult = plotConfigSchema.safeParse(yaml);
 	if (!zodResult.success) {
 		const msg = zodResult.error.issues
 			.map(issue => `'${issue.path.join('.')}': ${issue.message}`)
@@ -42,9 +52,12 @@ export function parsePlotConfig(source: string) {
 		throw new SyntaxError(msg);
 	}
 
-	const { function: mathFunc, ...rest } = zodResult.data;
+	let { functions, ...rest } = zodResult.data;
+	if (typeof functions == 'string') {
+		functions = [{ name: 'f', def: functions }]
+	}
 	return {
-		...rest,
-		mathFunc
+		functions,
+		...rest
 	} as PlotConfig;
 }

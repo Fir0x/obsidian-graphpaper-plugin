@@ -117,7 +117,7 @@ export default class MathplotPlugin extends Plugin {
 		const container = el.createDiv({ cls: 'mathplot-plot' });
 		const sampleOffset = Math.max(1e-10, (infos.xMax - infos.xMin) / infos.sampleCount);
 		const xValues = Array.from({ length: infos.sampleCount + 1 }, (_, i) => infos.xMin + i * sampleOffset);
-		const yValues = new MathInterpreter().interpret(infos.mathFunc, xValues);
+		const yValuesPerFunc = new MathInterpreter().interpret(infos.functions, xValues);
 
 		let layout: Partial<Plotly.Layout> = {
 			margin: { t: 20 },
@@ -139,11 +139,15 @@ export default class MathplotPlugin extends Plugin {
 				}
 
 				if (typeof infos.options.view.yMin !== 'undefined' || typeof infos.options.view.yMax !== 'undefined') {
+					const reduceFn = (globalMin: number, yValues: number[]) => {
+						const localMin = yValues.reduce((min, y) => y < min ? y : min)
+						return localMin < globalMin ? localMin : globalMin;
+					}
 					const yMin = typeof infos.options.view.yMin === 'undefined'
-						? yValues.reduce((min, value) => value < min ? value : min)
+						? yValuesPerFunc.reduce(reduceFn, Infinity)
 						: infos.options.view.yMin;
 					const yMax = typeof infos.options.view.yMax === 'undefined'
-						? yValues.reduce((max, value) => value > max ? value : max)
+						? yValuesPerFunc.reduce(reduceFn, Infinity)
 						: infos.options.view.yMax;
 
 					layout.yaxis = {
@@ -157,15 +161,23 @@ export default class MathplotPlugin extends Plugin {
 			responsive: true,
 		};
 
-		Plotly.newPlot(container, [{
-			x: xValues,
-			y: yValues,
-			type: 'scatter',
-			mode: 'lines',
-			line: {
-				dash: this.settings.curveLineType,
-			}
-		}], layout, config);
+
+		let plots: Plotly.Data[] = []
+		for (let i = 0; i < yValuesPerFunc.length; ++i) {
+			const yValues = yValuesPerFunc[i]
+			const functionConfig = infos.functions[i]!
+			plots.push({
+				x: xValues,
+				y: yValues,
+				type: 'scatter',
+				mode: 'lines',
+				name: functionConfig.name,
+				line: {
+					dash: this.settings.curveLineType,
+				}
+			})
+		}
+		Plotly.newPlot(container, plots, layout, config);
 
 		return container;
 	}

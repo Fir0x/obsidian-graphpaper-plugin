@@ -1,5 +1,6 @@
 import { lexMathExpr } from './mathLexer';
 import * as Parser from './mathParser';
+import { FunctionConfig } from './plotConfigParser';
 
 export class InterpreterError extends SyntaxError {
 	constructor(message: string) {
@@ -8,17 +9,21 @@ export class InterpreterError extends SyntaxError {
 }
 
 export class MathInterpreter {
-	interpret(expr: string, xValues: number[]) {
-		let tokens = lexMathExpr(expr);
-		let parser = new Parser.MathParser(tokens);
-		const root = parser.parse();
+	interpret(exprs: FunctionConfig[], xValues: number[]) {
+		let allResults = []
+		for (let expr of exprs) {
+			let tokens = lexMathExpr(expr.def);
+			let parser = new Parser.MathParser(tokens);
+			const root = parser.parse();
 
-		let result = []
-		for (const x of xValues) {
-			result.push(this.evaluateAst(root, x))
+			let results = []
+			for (const x of xValues) {
+				results.push(this.evaluateAst(root, x))
+			}
+			allResults.push(results)
 		}
 
-		return result;
+		return allResults;
 	}
 
 	private evaluateAst(node: Parser.AstNode, x: number): number {
