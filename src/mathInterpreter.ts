@@ -1,5 +1,5 @@
-import { lexMathExpr } from './lexer';
-import * as Parser from './parser';
+import { lexMathExpr } from './mathLexer';
+import * as Parser from './mathParser';
 
 export class InterpreterError extends SyntaxError {
 	constructor(message: string) {

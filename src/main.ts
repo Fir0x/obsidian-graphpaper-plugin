@@ -1,7 +1,6 @@
 import {
 	Plugin,
 	MarkdownRenderChild,
-	parseYaml
 } from 'obsidian';
 
 import {
@@ -11,54 +10,11 @@ import {
 } from './settings';
 
 import * as Plotly from 'plotly.js-dist-min';
-import { LexerError, TokenType } from './lexer';
-import { ParserError } from './parser';
-import { MathInterpreter, InterpreterError } from './interpreter';
-import { z } from 'zod';
+import { LexerError, TokenType } from './mathLexer';
+import { ParserError } from './mathParser';
+import { MathInterpreter, InterpreterError } from './mathInterpreter';
+import { PlotConfig, parsePlotConfig } from './plotConfigParser';
 
-const plotInfoSchema = z.strictObject({
-	xMin: z.number(),
-	xMax: z.number(),
-	sampleCount: z.number(),
-	function: z.coerce.string(),
-	view: z.strictObject({
-		xMin: z.number().optional(),
-		xMax: z.number().optional(),
-		yMin: z.number().optional(),
-		yMax: z.number().optional(),
-	}).optional(),
-});
-
-type PlotInfo = {
-	xMin: number,
-	xMax: number,
-	sampleCount: number,
-	mathFunc: string,
-	view?: {
-		xMin?: number,
-		xMax?: number,
-		yMin?: number,
-		yMax?: number,
-	},
-}
-
-function parse(source: string) {
-	const yaml = parseYaml(source);
-
-	const zodResult = plotInfoSchema.safeParse(yaml);
-	if (!zodResult.success) {
-		const msg = zodResult.error.issues
-			.map(issue => `'${issue.path.join('.')}': ${issue.message}`)
-			.join('\n');
-		throw new SyntaxError(msg);
-	}
-
-	const { function: mathFunc, ...rest } = zodResult.data;
-	return {
-		...rest,
-		mathFunc
-	} as PlotInfo;
-}
 
 function displayError(error: any, container: HTMLDivElement) {
 	let message: [string, boolean][] = [['MathPlot error:\n', true]];
@@ -125,7 +81,7 @@ export default class MathplotPlugin extends Plugin {
 
 		this.registerMarkdownCodeBlockProcessor('mathplot', (source, el, ctx) => {
 			try {
-				let infos = parse(source);
+				let infos = parsePlotConfig(source);
 				const plotDiv = this.generatePlot(infos, el);
 				this.plotDivs.push(plotDiv);
 
@@ -157,7 +113,7 @@ export default class MathplotPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	generatePlot(infos: PlotInfo, el: HTMLElement) {
+	generatePlot(infos: PlotConfig, el: HTMLElement) {
 		const container = el.createDiv({ cls: 'mathplot-plot' });
 		const sampleOffset = Math.max(1e-10, (infos.xMax - infos.xMin) / infos.sampleCount);
 		const xValues = Array.from({ length: infos.sampleCount + 1 }, (_, i) => infos.xMin + i * sampleOffset);
@@ -167,21 +123,33 @@ export default class MathplotPlugin extends Plugin {
 			margin: { t: 20 },
 		};
 
-		if (infos.view) {
-			if (typeof infos.view.xMin !== 'undefined' || typeof infos.view.xMax !== 'undefined') {
-				const xMin = typeof infos.view.xMin === 'undefined' ? xValues.reduce((min, value) => value < min ? value : min) : infos.view.xMin;
-				const xMax = typeof infos.view.xMax === 'undefined' ? xValues.reduce((max, value) => value > max ? value : max) : infos.view.xMax;
-				layout.xaxis = {
-					range: [xMin, xMax]
-				};
-			}
+		if (infos.options) {
+			if (infos.options.view) {
+				if (typeof infos.options.view.xMin !== 'undefined' || typeof infos.options.view.xMax !== 'undefined') {
+					const xMin = typeof infos.options.view.xMin === 'undefined'
+						? xValues.reduce((min, value) => value < min ? value : min)
+						: infos.options.view.xMin;
+					const xMax = typeof infos.options.view.xMax === 'undefined'
+						? xValues.reduce((max, value) => value > max ? value : max)
+						: infos.options.view.xMax;
 
-			if (typeof infos.view.yMin !== 'undefined' || typeof infos.view.yMax !== 'undefined') {
-				const yMin = typeof infos.view.yMin === 'undefined' ? yValues.reduce((min, value) => value < min ? value : min) : infos.view.yMin;
-				const yMax = typeof infos.view.yMax === 'undefined' ? yValues.reduce((max, value) => value > max ? value : max) : infos.view.yMax;
-				layout.yaxis = {
-					range: [yMin, yMax]
-				};
+					layout.xaxis = {
+						range: [xMin, xMax]
+					};
+				}
+
+				if (typeof infos.options.view.yMin !== 'undefined' || typeof infos.options.view.yMax !== 'undefined') {
+					const yMin = typeof infos.options.view.yMin === 'undefined'
+						? yValues.reduce((min, value) => value < min ? value : min)
+						: infos.options.view.yMin;
+					const yMax = typeof infos.options.view.yMax === 'undefined'
+						? yValues.reduce((max, value) => value > max ? value : max)
+						: infos.options.view.yMax;
+
+					layout.yaxis = {
+						range: [yMin, yMax]
+					};
+				}
 			}
 		}
 
