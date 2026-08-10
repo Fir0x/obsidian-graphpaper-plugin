@@ -6,3 +6,17 @@
 .mathplot-error span {
 	white-space: pre-wrap;
 }
+
+.mathplot-constants {
+	display: grid;
+	grid-template-columns: auto auto auto auto; /* One auto per column we want */
+	margin-bottom: 10px /* Ensure the lowest sliders are fully inside the render zone */
+}
+
+.mathplot-constant-label {
+	font-family: var(--font-interface-theme);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-ui-medium);
+	color: var(--text-normal);
+	white-space: nowrap;
+}

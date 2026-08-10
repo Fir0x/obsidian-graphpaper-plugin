@@ -1,6 +1,7 @@
 import {
 	Plugin,
 	MarkdownRenderChild,
+	SliderComponent,
 } from 'obsidian';
 
 import {
@@ -12,8 +13,8 @@ import {
 import * as Plotly from 'plotly.js-dist-min';
 import { LexerError, TokenType } from './mathLexer';
 import { ParserError } from './mathParser';
-import { MathInterpreter, InterpreterError } from './mathInterpreter';
-import { PlotConfig, parsePlotConfig } from './plotConfigParser';
+import { MathInterpreter, InterpreterError, ConstantDef } from './mathInterpreter';
+import { ConfigError, PlotConfig, parsePlotConfig } from './plotConfigParser';
 
 
 function displayError(error: any, container: HTMLDivElement) {
@@ -56,6 +57,8 @@ function displayError(error: any, container: HTMLDivElement) {
 		message.push([messagePart + ']', false]);
 	} else if (error instanceof InterpreterError) {
 		message.push([error.message, false]);
+	} else if (error instanceof ConfigError) {
+		message.push([error.message, false]);
 	} else {
 		message.push(['[Dev error] ' + (error instanceof Error ? error.message : String(error)), false]);
 	}
@@ -69,12 +72,23 @@ function displayError(error: any, container: HTMLDivElement) {
 	}
 }
 
+type PlotInfo = {
+	config: PlotConfig,
+	plotDiv: HTMLDivElement,
+	constantsDiv?: HTMLDivElement
+}
+
+type ConstantOverride = {
+	name: string,
+	value: number
+}
+
 export default class MathplotPlugin extends Plugin {
-	plotDivs!: HTMLDivElement[];
-	settings!: MathplotPluginSettings;
+	plots!: PlotInfo[]
+	settings!: MathplotPluginSettings
 
 	async onload() {
-		this.plotDivs = [];
+		this.plots = [];
 
 		await this.loadSettings();
 		this.addSettingTab(new MathplotSettingTab(this.app, this));
@@ -82,19 +96,19 @@ export default class MathplotPlugin extends Plugin {
 		this.registerMarkdownCodeBlockProcessor('mathplot', (source, el, ctx) => {
 			try {
 				let infos = parsePlotConfig(source);
-				const plotDiv = this.generatePlot(infos, el);
-				this.plotDivs.push(plotDiv);
+				const plot = this.generatePlot(infos, el);
+				this.plots.push(plot);
 
 				const plugin = this;
 				ctx.addChild(new (class extends MarkdownRenderChild {
 					onunload() {
-						Plotly.purge(plotDiv)
-						plugin.plotDivs.remove(plotDiv);
+						Plotly.purge(plot.plotDiv)
+						plugin.plots.remove(plot);
 					}
-				})(plotDiv));
+				})(plot.plotDiv));
 			} catch (error) {
 				const container = el.createDiv({ cls: 'mathplot-error' });
-				displayError(error, container)
+				displayError(error, container);
 			}
 		});
 	}
@@ -113,60 +127,58 @@ export default class MathplotPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	generatePlot(infos: PlotConfig, el: HTMLElement) {
-		const container = el.createDiv({ cls: 'mathplot-plot' });
-		const sampleOffset = Math.max(1e-10, (infos.xMax - infos.xMin) / infos.sampleCount);
-		const xValues = Array.from({ length: infos.sampleCount + 1 }, (_, i) => infos.xMin + i * sampleOffset);
-		const yValuesPerFunc = new MathInterpreter().interpret(infos.functions, xValues);
+	generatePlot(config: PlotConfig, el: HTMLElement) {
+		const rootContainer = el.createDiv({ cls: 'mathplot-root' });
+		const [xValues, yValuesPerFunc] = this.generateFunctionsData(config)
 
-		let layout: Partial<Plotly.Layout> = {
+		let plotlyLayout: Partial<Plotly.Layout> = {
 			margin: { t: 20 },
 		};
 
-		if (infos.options) {
-			if (infos.options.view) {
-				if (typeof infos.options.view.xMin !== 'undefined' || typeof infos.options.view.xMax !== 'undefined') {
-					const xMin = typeof infos.options.view.xMin === 'undefined'
+		if (config.options) {
+			if (config.options.view) {
+				if (typeof config.options.view.xMin !== 'undefined' || typeof config.options.view.xMax !== 'undefined') {
+					const xMin = typeof config.options.view.xMin === 'undefined'
 						? xValues.reduce((min, value) => value < min ? value : min)
-						: infos.options.view.xMin;
-					const xMax = typeof infos.options.view.xMax === 'undefined'
+						: config.options.view.xMin;
+					const xMax = typeof config.options.view.xMax === 'undefined'
 						? xValues.reduce((max, value) => value > max ? value : max)
-						: infos.options.view.xMax;
+						: config.options.view.xMax;
 
-					layout.xaxis = {
+					plotlyLayout.xaxis = {
 						range: [xMin, xMax]
 					};
 				}
 
-				if (typeof infos.options.view.yMin !== 'undefined' || typeof infos.options.view.yMax !== 'undefined') {
+				if (typeof config.options.view.yMin !== 'undefined' || typeof config.options.view.yMax !== 'undefined') {
 					const reduceFn = (globalMin: number, yValues: number[]) => {
 						const localMin = yValues.reduce((min, y) => y < min ? y : min)
 						return localMin < globalMin ? localMin : globalMin;
 					}
-					const yMin = typeof infos.options.view.yMin === 'undefined'
+					const yMin = typeof config.options.view.yMin === 'undefined'
 						? yValuesPerFunc.reduce(reduceFn, Infinity)
-						: infos.options.view.yMin;
-					const yMax = typeof infos.options.view.yMax === 'undefined'
+						: config.options.view.yMin;
+					const yMax = typeof config.options.view.yMax === 'undefined'
 						? yValuesPerFunc.reduce(reduceFn, Infinity)
-						: infos.options.view.yMax;
+						: config.options.view.yMax;
 
-					layout.yaxis = {
+					plotlyLayout.yaxis = {
 						range: [yMin, yMax]
 					};
 				}
 			}
 		}
 
-		let config: Partial<Plotly.Config> = {
+		let plotlyConfig: Partial<Plotly.Config> = {
 			responsive: true,
 		};
 
 
-		let plots: Plotly.Data[] = []
+		let plotlyData: Plotly.Data[] = [];
 		for (let i = 0; i < yValuesPerFunc.length; ++i) {
-			const yValues = yValuesPerFunc[i]
-			const functionConfig = infos.functions[i]!
-			plots.push({
+			const yValues = yValuesPerFunc[i];
+			const functionConfig = config.functions[i]!;
+			plotlyData.push({
 				x: xValues,
 				y: yValues,
 				type: 'scatter',
@@ -175,21 +187,88 @@ export default class MathplotPlugin extends Plugin {
 				line: {
 					dash: this.settings.curveLineType,
 				}
-			})
+			});
 		}
-		Plotly.newPlot(container, plots, layout, config);
 
-		return container;
+		const plotlyContainer = rootContainer.createDiv({ cls: 'mathplot-plot' });
+		Plotly.newPlot(plotlyContainer, plotlyData, plotlyLayout, plotlyConfig);
+
+		let plot: PlotInfo = {
+			plotDiv: plotlyContainer,
+			config
+		}
+
+		if (config.constants) {
+			const constantsContainer = rootContainer.createDiv({ cls: 'mathplot-constants' });
+			for (const constantConfig of config.constants) {
+				// No need for sliders if no range is defined
+				if (typeof constantConfig.range === 'undefined') {
+					continue;
+				}
+
+				const uniqueConstantContainer = constantsContainer.createDiv();
+				uniqueConstantContainer.createSpan({ cls: 'mathplot-constant-label', text: `${constantConfig.name} = ` });
+				new SliderComponent(uniqueConstantContainer)
+					.setLimits(constantConfig.range.min, constantConfig.range.max, constantConfig.range.step)
+					.setValue(constantConfig.value)
+					.setInstant(true)
+					.onChange((newValue) => this.updatePlotConstant(plot, constantConfig.name, newValue));
+			}
+			plot.constantsDiv = constantsContainer;
+		}
+
+		return plot
 	}
 
 	updatePlotsRender() {
-		for (const plotDiv of this.plotDivs) {
-			Plotly.update(plotDiv, {
+		for (const plot of this.plots) {
+			Plotly.update(plot.plotDiv, {
 				line: {
 					dash: this.settings.curveLineType
 				}
 			}, {});
 		}
+	}
+
+	private generateFunctionsData(config: PlotConfig, constantOverrides?: ConstantOverride[]): [number[], number[][]] {
+		const sampleOffset = Math.max(1e-10, (config.xMax - config.xMin) / config.sampleCount);
+		const xValues = Array.from({ length: config.sampleCount + 1 }, (_, i) => config.xMin + i * sampleOffset);
+
+		let constants: ConstantDef[] = []
+		if (config.constants) {
+			for (const constantConfig of config.constants) {
+				const constantOverride = constantOverrides?.find((value) => value.name === constantConfig.name);
+				if (constantOverride) {
+					constants.push({ name: constantConfig.name, value: constantOverride.value });
+				} else {
+					constants.push({ name: constantConfig.name, value: constantConfig.value });
+				}
+			}
+		}
+
+		let interpreter = new MathInterpreter(constants);
+		let yValuesPerFunc = []
+		for (const expr of config.functions) {
+			yValuesPerFunc.push(interpreter.interpret(expr, xValues));
+		}
+
+		return [xValues, yValuesPerFunc];
+	}
+
+	private updatePlotConstant(plot: PlotInfo, name: string, value: number) {
+		const [xValues, yValuesPerFunc] = this.generateFunctionsData(plot.config, [{ name, value }]);
+		this.updatePlotValues(plot.plotDiv, xValues, yValuesPerFunc);
+	}
+
+	private updatePlotValues(plotDiv: HTMLDivElement, xValues: number[], yValuesPerFunc: number[][]) {
+		for (let i = 0; i < yValuesPerFunc.length; ++i) {
+			const yValues = yValuesPerFunc[i]!;
+			Plotly.update(plotDiv, {
+				x: [xValues],
+				y: [yValues],
+			}, {}, i);
+		}
+
 	}
 }
 

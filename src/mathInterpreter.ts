@@ -8,22 +8,42 @@ export class InterpreterError extends SyntaxError {
 	}
 }
 
-export class MathInterpreter {
-	interpret(exprs: FunctionConfig[], xValues: number[]) {
-		let allResults = []
-		for (let expr of exprs) {
-			let tokens = lexMathExpr(expr.def);
-			let parser = new Parser.MathParser(tokens);
-			const root = parser.parse();
+export type ConstantDef = {
+	name: string,
+	value: number
+}
 
-			let results = []
-			for (const x of xValues) {
-				results.push(this.evaluateAst(root, x))
+export class MathInterpreter {
+	constants: ConstantDef[];
+
+	constructor(constants: ConstantDef[]) {
+		if (constants) {
+			let constantNames = new Set<string>();
+			for (let constant of constants) {
+				if (constantNames.has(constant.name)) {
+					throw new InterpreterError(`Constant with name '${constant.name}' already exists. Constants must have a unique name.`);
+				} else if (['x', 'e', 'pi'].includes(constant.name)) {
+					throw new InterpreterError(`Constant cannot have reserved name '${constant.name}'.`)
+				} else {
+					constantNames.add(constant.name);
+				}
 			}
-			allResults.push(results)
 		}
 
-		return allResults;
+		this.constants = constants;
+	}
+
+	interpret(expr: FunctionConfig, xValues: number[]) {
+		let tokens = lexMathExpr(expr.def);
+		let parser = new Parser.MathParser(tokens);
+		const root = parser.parse();
+
+		let results = [];
+		for (const x of xValues) {
+			results.push(this.evaluateAst(root, x));
+		}
+
+		return results;
 	}
 
 	private evaluateAst(node: Parser.AstNode, x: number): number {
@@ -64,7 +84,13 @@ export class MathInterpreter {
 			case 'x': return x;
 			case 'e': return Math.E;
 			case 'pi': return Math.PI;
-			default: throw new InterpreterError(`Unknown identifier '${identifier}'.`)
+			default:
+				const constant = this.constants.find((constant) => constant.name === identifier);
+				if (constant) {
+					return constant.value;
+				}
+
+				throw new InterpreterError(`Unknown identifier '${identifier}'.`);
 		}
 	}
 
@@ -78,7 +104,7 @@ export class MathInterpreter {
 			case 'asin': return Math.asin;
 			case 'tan': return Math.tan;
 			case 'atan': return Math.atan;
-			default: throw new InterpreterError(`Unknown identifier '${identifier}'.`)
+			default: throw new InterpreterError(`Unknown identifier '${identifier}'.`);
 		}
 	}
 }
