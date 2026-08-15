@@ -15,6 +15,7 @@ export type ConstantDef = {
 
 export class MathInterpreter {
 	constants: ConstantDef[];
+	currentExpr?: FunctionConfig;
 
 	constructor(constants: ConstantDef[]) {
 		if (constants) {
@@ -34,6 +35,8 @@ export class MathInterpreter {
 	}
 
 	interpret(expr: FunctionConfig, xValues: number[]) {
+		this.currentExpr = expr;
+
 		let tokens = lexMathExpr(expr.def);
 		let parser = new Parser.MathParser(tokens);
 		const root = parser.parse();
@@ -90,7 +93,7 @@ export class MathInterpreter {
 					return constant.value;
 				}
 
-				throw new InterpreterError(`Unknown identifier '${identifier}'.`);
+				throw new InterpreterError(`Unknown identifier '${identifier}' in function '${this.currentExpr!.name}'.`);
 		}
 	}
 
@@ -104,7 +107,7 @@ export class MathInterpreter {
 			case 'asin': return Math.asin;
 			case 'tan': return Math.tan;
 			case 'atan': return Math.atan;
-			default: throw new InterpreterError(`Unknown identifier '${identifier}'.`);
+			default: throw new InterpreterError(`Unknown identifier '${identifier}' in function '${this.currentExpr!.name}'.`);
 		}
 	}
 }
