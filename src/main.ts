@@ -14,7 +14,7 @@ import * as Plotly from 'plotly.js-dist-min';
 import { LexerError, TokenType } from './mathLexer';
 import { ParserError } from './mathParser';
 import { MathInterpreter, InterpreterError, ConstantDef } from './mathInterpreter';
-import { ConfigError, PlotConfig, parsePlotConfig } from './plotConfigParser';
+import { ConfigError, PlotConfig, parsePlotConfig, ViewOptions, PlotOptions } from './plotConfigParser';
 
 
 function displayError(error: any, container: HTMLDivElement) {
@@ -76,6 +76,8 @@ type PlotInfo = {
 	config: PlotConfig,
 	plotDiv: HTMLDivElement,
 	constantsDiv?: HTMLDivElement
+	// Needed because of a Plotly bug in their autorange system on update/react (see isssue #7024)
+	plotlyLayout: Partial<Plotly.Layout>
 }
 
 type ConstantOverride = {
@@ -127,52 +129,19 @@ export default class MathplotPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	generatePlot(config: PlotConfig, el: HTMLElement) {
+	updatePlotsRender() {
+		for (const plot of this.plots) {
+			Plotly.update(plot.plotDiv, {
+				line: {
+					dash: this.settings.curveLineType
+				}
+			}, {});
+		}
+	}
+
+	private generatePlot(config: PlotConfig, el: HTMLElement) {
 		const rootContainer = el.createDiv({ cls: 'mathplot-root' });
 		const [xValues, yValuesPerFunc] = this.generateFunctionsData(config)
-
-		let plotlyLayout: Partial<Plotly.Layout> = {
-			margin: { t: 20 },
-		};
-
-		if (config.options) {
-			if (config.options.view) {
-				if (typeof config.options.view.xMin !== 'undefined' || typeof config.options.view.xMax !== 'undefined') {
-					const xMin = typeof config.options.view.xMin === 'undefined'
-						? xValues.reduce((min, value) => value < min ? value : min)
-						: config.options.view.xMin;
-					const xMax = typeof config.options.view.xMax === 'undefined'
-						? xValues.reduce((max, value) => value > max ? value : max)
-						: config.options.view.xMax;
-
-					plotlyLayout.xaxis = {
-						range: [xMin, xMax]
-					};
-				}
-
-				if (typeof config.options.view.yMin !== 'undefined' || typeof config.options.view.yMax !== 'undefined') {
-					const reduceFn = (globalMin: number, yValues: number[]) => {
-						const localMin = yValues.reduce((min, y) => y < min ? y : min)
-						return localMin < globalMin ? localMin : globalMin;
-					}
-					const yMin = typeof config.options.view.yMin === 'undefined'
-						? yValuesPerFunc.reduce(reduceFn, Infinity)
-						: config.options.view.yMin;
-					const yMax = typeof config.options.view.yMax === 'undefined'
-						? yValuesPerFunc.reduce(reduceFn, Infinity)
-						: config.options.view.yMax;
-
-					plotlyLayout.yaxis = {
-						range: [yMin, yMax]
-					};
-				}
-			}
-		}
-
-		let plotlyConfig: Partial<Plotly.Config> = {
-			responsive: true,
-		};
-
 
 		let plotlyData: Plotly.Data[] = [];
 		for (let i = 0; i < yValuesPerFunc.length; ++i) {
@@ -190,12 +159,15 @@ export default class MathplotPlugin extends Plugin {
 			});
 		}
 
+		const [plotlyLayout, plotlyConfig] = plotlySettingsFromConfig(config, xValues, yValuesPerFunc);
+
 		const plotlyContainer = rootContainer.createDiv({ cls: 'mathplot-plot' });
-		Plotly.newPlot(plotlyContainer, plotlyData, plotlyLayout, plotlyConfig);
+		Plotly.newPlot(plotlyContainer, plotlyData, structuredClone(plotlyLayout), plotlyConfig);
 
 		let plot: PlotInfo = {
 			plotDiv: plotlyContainer,
-			config
+			config,
+			plotlyLayout,
 		}
 
 		if (config.constants) {
@@ -218,16 +190,6 @@ export default class MathplotPlugin extends Plugin {
 		}
 
 		return plot
-	}
-
-	updatePlotsRender() {
-		for (const plot of this.plots) {
-			Plotly.update(plot.plotDiv, {
-				line: {
-					dash: this.settings.curveLineType
-				}
-			}, {});
-		}
 	}
 
 	private generateFunctionsData(config: PlotConfig, constantOverrides?: ConstantOverride[]): [number[], number[][]] {
@@ -257,18 +219,84 @@ export default class MathplotPlugin extends Plugin {
 
 	private updatePlotConstant(plot: PlotInfo, name: string, value: number) {
 		const [xValues, yValuesPerFunc] = this.generateFunctionsData(plot.config, [{ name, value }]);
-		this.updatePlotValues(plot.plotDiv, xValues, yValuesPerFunc);
+		this.updatePlotValues(plot, xValues, yValuesPerFunc);
 	}
 
-	private updatePlotValues(plotDiv: HTMLDivElement, xValues: number[], yValuesPerFunc: number[][]) {
+	private updatePlotValues(plot: PlotInfo, xValues: number[], yValuesPerFunc: number[][]) {
 		for (let i = 0; i < yValuesPerFunc.length; ++i) {
 			const yValues = yValuesPerFunc[i]!;
-			Plotly.update(plotDiv, {
+			Plotly.update(plot.plotDiv, {
 				x: [xValues],
 				y: [yValues],
-			}, {}, i);
+			}, structuredClone(plot.plotlyLayout), i);
 		}
 
+	}
+}
+
+function plotlySettingsFromConfig(config: PlotConfig, xValues: number[], yValuesPerFunc: number[][]): [Partial<Plotly.Layout>, Partial<Plotly.Config>] {
+	let plotlyLayout: Partial<Plotly.Layout> = {
+		margin: { t: 20 },
+	};
+
+	let plotlyConfig: Partial<Plotly.Config> = {
+		responsive: true,
+	};
+
+	viewConfigToPlotly(config.options.view, plotlyLayout, xValues, yValuesPerFunc);
+
+	return [plotlyLayout, plotlyConfig];
+}
+
+function viewConfigToPlotly(viewConfig: ViewOptions, plotlyLayout: Partial<Plotly.Layout>, xValues: number[], yValuesPerFunc: number[][]) {
+	{
+		const xAxisConfig = viewConfig.xAxis;
+		let plotlyAxis: Partial<Plotly.LayoutAxis> = {};
+
+		const xMin = xAxisConfig.autoRange
+			? xAxisConfig.min ?? xValues.reduce((min, value) => value < min ? value : min)
+			: xAxisConfig.min
+		const xMax = xAxisConfig.autoRange
+			? xAxisConfig.max ?? xValues.reduce((max, value) => value > max ? value : max)
+			: xAxisConfig.max;
+
+		plotlyAxis.range = [xMin, xMax];
+
+		if (xAxisConfig.disableZoom) {
+			plotlyAxis.fixedrange = true;
+		}
+
+		plotlyLayout.xaxis = plotlyAxis;
+	}
+
+	{
+		const yAxisConfig = viewConfig.yAxis;
+		let plotlyAxis: Partial<Plotly.LayoutAxis> = {};
+
+		const reduceMin = (globalMin: number, yValues: number[]) => {
+			const localMin = yValues.reduce((min, y) => y < min ? y : min)
+			return localMin < globalMin ? localMin : globalMin;
+		}
+
+		const reduceMax = (globalMin: number, yValues: number[]) => {
+			const localMax = yValues.reduce((max, y) => y > max ? y : max)
+			return localMax > globalMin ? localMax : globalMin;
+		}
+
+		const yMin = yAxisConfig.autoRange
+			? yAxisConfig.min
+			: yAxisConfig.min ?? yValuesPerFunc.reduce(reduceMin, Infinity);
+		const yMax = yAxisConfig.autoRange
+			? yAxisConfig.max
+			: yAxisConfig.max ?? yValuesPerFunc.reduce(reduceMax, -Infinity);
+
+		plotlyAxis.range = [yMin, yMax];
+
+		if (yAxisConfig.disableZoom) {
+			plotlyAxis.fixedrange = true;
+		}
+
+		plotlyLayout.yaxis = plotlyAxis;
 	}
 }
 
