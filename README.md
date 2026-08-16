@@ -1,29 +1,53 @@
 # Graphpaper
 
-Graphpaper is a an Obsidian plugin to display interactive math plots in notes.
+Graphpaper is an Obsidian plugin to display interactive math plots in notes.
 
 This plugin aims for an easy and readable way to describe your plot.
 
 ## How to use?
 
+### Basic usage
+
 Simply add a code block with the `graphpaper` specifier.
 
-The language used for plot configuration is YAML. All fields are required:
+The language used for plot configuration is YAML. All these fields are required:
 
 - `xMin`: Minimum x value for the function.
 - `xMax`: Maximum x value for the function.
 - `sampleCount`: Number of samples taken along the curve. In reality, one more
 sample is taken in order to reach `xMax`.
-- `function`: The math function to plot.
+- `functions`: The math functions to plot.
 
-Example:
+If you wan to define multiple functions, `functions` must be a list.
+Each element must have a `name` and a `def` fields.
+
+If you want to define only one function, you can just write it as the value of `functions`.
+
+Examples:
+
+- One function
 
 ```graphpaper
 xMin: -10
 xMax: 10
-sampleCount: 100
-function: x^2
+sampleCount: 1000
+functions: x^2
 ```
+
+- Multiple functions
+
+```graphpaper
+xMin: -10
+xMax: 10
+sampleCount: 1000
+functions:
+  - name: f
+    def: cos(x)
+  - name: g
+    def: sin(x)
+```
+
+See the [wiki](https://github.com/Fir0x/obsidian-graphpaper-plugin/wiki/Usage) for more.
 
 ## FAQ
 

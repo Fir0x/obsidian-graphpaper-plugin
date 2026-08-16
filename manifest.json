@@ -1,4 +1,5 @@
 {
+	"manifest_version": 3,
 	"id": "graphpaper",
 	"name": "Graphpaper",
 	"version": "0.0.0",
@@ -6,5 +7,5 @@
 	"description": "Plot math graph from code blocks.",
 	"author": "Fir0x",
 	"authorUrl": "https://github.com/Fir0x",
-	"isDesktopOnly": false
+	"isDesktopOnly": true
 }
