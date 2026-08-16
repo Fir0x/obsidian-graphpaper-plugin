@@ -10,7 +10,7 @@
 .mathplot-constants {
 	display: grid;
 	grid-template-columns: auto auto auto auto; /* One auto per column we want */
-	margin-bottom: 10px /* Ensure the lowest sliders are fully inside the render zone */
+	margin-bottom: 10px; /* Ensure the lowest sliders are fully inside the render zone */
 }
 
 .mathplot-constant-label {

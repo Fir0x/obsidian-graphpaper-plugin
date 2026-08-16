@@ -2,6 +2,7 @@ import {
 	Plugin,
 	MarkdownRenderChild,
 	SliderComponent,
+	TextComponent,
 } from 'obsidian';
 
 import {
@@ -14,7 +15,7 @@ import * as Plotly from 'plotly.js-dist-min';
 import { LexerError, TokenType } from './mathLexer';
 import { ParserError } from './mathParser';
 import { MathInterpreter, InterpreterError, ConstantDef } from './mathInterpreter';
-import { ConfigError, PlotConfig, parsePlotConfig, ViewOptions, PlotOptions } from './plotConfigParser';
+import { ConfigError, PlotConfig, parsePlotConfig, ViewOptions, PlotOptions, ConstantConfig } from './plotConfigParser';
 
 
 function displayError(error: any, container: HTMLDivElement) {
@@ -171,21 +172,7 @@ export default class MathplotPlugin extends Plugin {
 		}
 
 		if (config.constants) {
-			const constantsContainer = rootContainer.createDiv({ cls: 'mathplot-constants' });
-			for (const constantConfig of config.constants) {
-				// No need for sliders if no range is defined
-				if (typeof constantConfig.range === 'undefined') {
-					continue;
-				}
-
-				const uniqueConstantContainer = constantsContainer.createDiv();
-				uniqueConstantContainer.createSpan({ cls: 'mathplot-constant-label', text: `${constantConfig.name} = ` });
-				new SliderComponent(uniqueConstantContainer)
-					.setLimits(constantConfig.range.min, constantConfig.range.max, constantConfig.range.step)
-					.setValue(constantConfig.value)
-					.setInstant(true)
-					.onChange((newValue) => this.updatePlotConstant(plot, constantConfig.name, newValue));
-			}
+			const constantsContainer = this.createConstantsContainer(rootContainer, config.constants, plot);
 			plot.constantsDiv = constantsContainer;
 		}
 
@@ -217,6 +204,77 @@ export default class MathplotPlugin extends Plugin {
 		return [xValues, yValuesPerFunc];
 	}
 
+	private createConstantsContainer(rootContainer: HTMLElement, constantConfigs: ConstantConfig[], plot: PlotInfo) {
+		const constantsContainer = rootContainer.createDiv({ cls: 'mathplot-constants' });
+		for (const constantConfig of constantConfigs) {
+			// No need for sliders if no range is defined
+			if (constantConfig.range === undefined) {
+				continue;
+			}
+
+			const uniqueConstantContainer = constantsContainer.createDiv();
+			uniqueConstantContainer.createSpan({ cls: 'mathplot-constant-label', text: `${constantConfig.name} = ` });
+			const slider = new SliderComponent(uniqueConstantContainer)
+				.setLimits(constantConfig.range.min, constantConfig.range.max, constantConfig.range.step)
+				.setValue(constantConfig.value)
+				.setInstant(true)
+				.onChange((newValue) => this.updatePlotConstant(plot, constantConfig.name, newValue));
+
+			let sliderEl = slider.sliderEl;
+			sliderEl.addEventListener('dblclick', () => {
+				const input = new TextComponent(uniqueConstantContainer)
+					.setValue(slider.getValue().toString());
+
+				let inputEl = input.inputEl;
+				let slideSpanEl = sliderEl.previousElementSibling as HTMLElement | null;
+				inputEl.type = 'number';
+				const inputWidth = sliderEl.offsetWidth + (slideSpanEl?.offsetWidth ?? 0);
+				inputEl.style.width = `${inputWidth}px`;
+
+				inputEl.focus();
+				inputEl.select();
+				if (slideSpanEl) {
+					slideSpanEl.style.display = 'none';
+				}
+				sliderEl.style.display = 'none';
+
+				const restoreSliderMode = () => {
+					inputEl.remove();
+					sliderEl.style.display = '';
+					if (slideSpanEl) {
+						slideSpanEl.style.display = '';
+					}
+				};
+
+				let preventCommit = false;
+				const commit = () => {
+					if (preventCommit) return;
+
+					let value = parseFloat(inputEl.value);
+					if (!Number.isNaN(value)) {
+						slider.setValue(Math.clamp(value, constantConfig.range!.min, constantConfig.range!.max));
+					}
+
+					// Need to be done here because inputEl.remove() will trigger a blur event
+					preventCommit = true;
+					restoreSliderMode();
+				};
+
+				inputEl.addEventListener('blur', commit);
+				inputEl.addEventListener('keydown', (e) => {
+					if (e.key == 'Enter') {
+						commit();
+					} else if (e.key == 'Escape') {
+						preventCommit = true;
+						restoreSliderMode();
+					}
+				})
+			});
+		}
+
+		return constantsContainer;
+	}
+
 	private updatePlotConstant(plot: PlotInfo, name: string, value: number) {
 		const [xValues, yValuesPerFunc] = this.generateFunctionsData(plot.config, [{ name, value }]);
 		this.updatePlotValues(plot, xValues, yValuesPerFunc);
@@ -230,7 +288,6 @@ export default class MathplotPlugin extends Plugin {
 				y: [yValues],
 			}, structuredClone(plot.plotlyLayout), i);
 		}
-
 	}
 }
 
