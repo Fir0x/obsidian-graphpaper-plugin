@@ -1,19 +1,19 @@
-.mathplot-error#notice {
+.graphpaper-error#notice {
 	color: red;
 	font-weight: 'bold';
 }
 
-.mathplot-error span {
+.graphpaper-error span {
 	white-space: pre-wrap;
 }
 
-.mathplot-constants {
+.graphpaper-constants {
 	display: grid;
 	grid-template-columns: auto auto auto auto; /* One auto per column we want */
 	margin-bottom: 10px; /* Ensure the lowest sliders are fully inside the render zone */
 }
 
-.mathplot-constant-label {
+.graphpaper-constant-label {
 	font-family: var(--font-interface-theme);
 	font-size: var(--font-ui-small);
 	font-weight: var(--font-ui-medium);

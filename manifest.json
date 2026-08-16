@@ -1,6 +1,6 @@
 {
-	"id": "mathplot",
-	"name": "MathPlot",
+	"id": "graphpaper",
+	"name": "Graphpaper",
 	"version": "0.0.0",
 	"minAppVersion": "1.12.0",
 	"description": "Plot math graph from code blocks.",

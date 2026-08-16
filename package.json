@@ -1,5 +1,5 @@
 {
-	"name": "mathplot",
+	"name": "graphpaper",
 	"version": "0.0.0",
 	"description": "Obsidian plugin to display math plots in notes.",
 	"main": "main.js",

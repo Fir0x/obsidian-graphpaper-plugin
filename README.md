@@ -1,12 +1,12 @@
-# MathPlot
+# Graphpaper
 
-MathPlot is a an Obsidian plugin to display interactive math plots in notes.
+Graphpaper is a an Obsidian plugin to display interactive math plots in notes.
 
 This plugin aims for an easy and readable way to describe your plot.
 
 ## How to use?
 
-Simply add a code block with the `mathplot` specifier.
+Simply add a code block with the `graphpaper` specifier.
 
 The language used for plot configuration is YAML. All fields are required:
 
@@ -18,7 +18,7 @@ sample is taken in order to reach `xMax`.
 
 Example:
 
-```mathplot
+```graphpaper
 xMin: -10
 xMax: 10
 sampleCount: 100
@@ -29,7 +29,7 @@ function: x^2
 
 ### What is used to create the plot?
 
-MathPlot is powered by [Plotly.js](https://github.com/plotly/plotly.js/).
+Graphpaper is powered by [Plotly.js](https://github.com/plotly/plotly.js/).
 
 ### Was any LLM involved with this project?
 

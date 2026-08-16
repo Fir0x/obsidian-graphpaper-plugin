@@ -7,19 +7,19 @@ import {
 
 import {
 	DEFAULT_SETTINGS,
-	MathplotPluginSettings,
-	MathplotSettingTab,
+	GraphpaperPluginSettings,
+	GraphpaperSettingTab,
 } from './settings';
 
 import * as Plotly from 'plotly.js-dist-min';
 import { LexerError, TokenType } from './mathLexer';
 import { ParserError } from './mathParser';
 import { MathInterpreter, InterpreterError, ConstantDef } from './mathInterpreter';
-import { ConfigError, PlotConfig, parsePlotConfig, ViewOptions, PlotOptions, ConstantConfig } from './plotConfigParser';
+import { ConfigError, PlotConfig, parsePlotConfig, ViewOptions, ConstantConfig } from './plotConfigParser';
 
 
 function displayError(error: any, container: HTMLDivElement) {
-	let message: [string, boolean][] = [['MathPlot error:\n', true]];
+	let message: [string, boolean][] = [['Graphpaper error:\n', true]];
 	if (error instanceof LexerError) {
 		message.push([error.message + '\nHint: ' + error.source.slice(0, error.index), false]);
 		message.push([error.source[error.index]!, true]);
@@ -66,9 +66,9 @@ function displayError(error: any, container: HTMLDivElement) {
 
 	for (const messagePart of message) {
 		if (messagePart[1]) {
-			container.createSpan({ text: messagePart[0]!, cls: 'mathplot-error', attr: { id: 'notice' } });
+			container.createSpan({ text: messagePart[0]!, cls: 'graphpaper-error', attr: { id: 'notice' } });
 		} else {
-			container.createSpan({ text: messagePart[0], cls: 'mathplot-error' });
+			container.createSpan({ text: messagePart[0], cls: 'graphpaper-error' });
 		}
 	}
 }
@@ -86,17 +86,17 @@ type ConstantOverride = {
 	value: number
 }
 
-export default class MathplotPlugin extends Plugin {
+export default class GraphpaperPlugin extends Plugin {
 	plots!: PlotInfo[]
-	settings!: MathplotPluginSettings
+	settings!: GraphpaperPluginSettings
 
 	async onload() {
 		this.plots = [];
 
 		await this.loadSettings();
-		this.addSettingTab(new MathplotSettingTab(this.app, this));
+		this.addSettingTab(new GraphpaperSettingTab(this.app, this));
 
-		this.registerMarkdownCodeBlockProcessor('mathplot', (source, el, ctx) => {
+		this.registerMarkdownCodeBlockProcessor('graphpaper', (source, el, ctx) => {
 			try {
 				let infos = parsePlotConfig(source);
 				const plot = this.generatePlot(infos, el);
@@ -110,7 +110,7 @@ export default class MathplotPlugin extends Plugin {
 					}
 				})(plot.plotDiv));
 			} catch (error) {
-				const container = el.createDiv({ cls: 'mathplot-error' });
+				const container = el.createDiv({ cls: 'graphpaper-error' });
 				displayError(error, container);
 			}
 		});
@@ -122,7 +122,7 @@ export default class MathplotPlugin extends Plugin {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			(await this.loadData()) as Partial<MathplotPluginSettings>,
+			(await this.loadData()) as Partial<GraphpaperPluginSettings>,
 		);
 	}
 
@@ -141,7 +141,7 @@ export default class MathplotPlugin extends Plugin {
 	}
 
 	private generatePlot(config: PlotConfig, el: HTMLElement) {
-		const rootContainer = el.createDiv({ cls: 'mathplot-root' });
+		const rootContainer = el.createDiv({ cls: 'graphpaper-root' });
 		const [xValues, yValuesPerFunc] = this.generateFunctionsData(config)
 
 		let plotlyData: Plotly.Data[] = [];
@@ -162,7 +162,7 @@ export default class MathplotPlugin extends Plugin {
 
 		const [plotlyLayout, plotlyConfig] = plotlySettingsFromConfig(config, xValues, yValuesPerFunc);
 
-		const plotlyContainer = rootContainer.createDiv({ cls: 'mathplot-plot' });
+		const plotlyContainer = rootContainer.createDiv({ cls: 'graphpaper-plot' });
 		Plotly.newPlot(plotlyContainer, plotlyData, structuredClone(plotlyLayout), plotlyConfig);
 
 		let plot: PlotInfo = {
@@ -205,7 +205,7 @@ export default class MathplotPlugin extends Plugin {
 	}
 
 	private createConstantsContainer(rootContainer: HTMLElement, constantConfigs: ConstantConfig[], plot: PlotInfo) {
-		const constantsContainer = rootContainer.createDiv({ cls: 'mathplot-constants' });
+		const constantsContainer = rootContainer.createDiv({ cls: 'graphpaper-constants' });
 		for (const constantConfig of constantConfigs) {
 			// No need for sliders if no range is defined
 			if (constantConfig.range === undefined) {
@@ -213,7 +213,7 @@ export default class MathplotPlugin extends Plugin {
 			}
 
 			const uniqueConstantContainer = constantsContainer.createDiv();
-			uniqueConstantContainer.createSpan({ cls: 'mathplot-constant-label', text: `${constantConfig.name} = ` });
+			uniqueConstantContainer.createSpan({ cls: 'graphpaper-constant-label', text: `${constantConfig.name} = ` });
 			const slider = new SliderComponent(uniqueConstantContainer)
 				.setLimits(constantConfig.range.min, constantConfig.range.max, constantConfig.range.step)
 				.setValue(constantConfig.value)

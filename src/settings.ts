@@ -1,20 +1,20 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
-import MathplotPlugin from './main';
+import GraphpaperPlugin from './main';
 
 import { Dash } from 'plotly.js-dist-min';
 
-export interface MathplotPluginSettings {
+export interface GraphpaperPluginSettings {
 	curveLineType: Dash;
 }
 
-export const DEFAULT_SETTINGS: MathplotPluginSettings = {
+export const DEFAULT_SETTINGS: GraphpaperPluginSettings = {
 	curveLineType: 'solid',
 };
 
-export class MathplotSettingTab extends PluginSettingTab {
-	plugin: MathplotPlugin;
+export class GraphpaperSettingTab extends PluginSettingTab {
+	plugin: GraphpaperPlugin;
 
-	constructor(app: App, plugin: MathplotPlugin) {
+	constructor(app: App, plugin: GraphpaperPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
