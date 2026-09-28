@@ -32,6 +32,7 @@ export type AxisOptions = {
 export type ViewOptions = {
 	xAxis: AxisOptions,
 	yAxis: AxisOptions,
+	zAxis: AxisOptions,
 }
 
 export type PlotOptions = {
@@ -39,9 +40,12 @@ export type PlotOptions = {
 }
 
 export type PlotConfig = {
+	type: '2D' | '3D',
 	xMin: number,
 	xMax: number,
-	sampleCount: number,
+	yMin: number,
+	yMax: number,
+	sampleCountPerAxis: number,
 	functions: FunctionConfig[],
 	constants: ConstantConfig[],
 	options: PlotOptions,
@@ -58,6 +62,7 @@ const defaultPlotOptions: PlotOptions = {
 	view: {
 		xAxis: defaultAxisOptions,
 		yAxis: defaultAxisOptions,
+		zAxis: defaultAxisOptions,
 	}
 }
 
@@ -87,17 +92,33 @@ const plotOptionsSchema = z.strictObject({
 	view: z.strictObject({
 		xAxis: plotAxisConfigSchema.default(defaultPlotOptions.view.xAxis),
 		yAxis: plotAxisConfigSchema.default(defaultPlotOptions.view.yAxis),
+		zAxis: plotAxisConfigSchema.default(defaultPlotOptions.view.zAxis),
 	}).default(defaultPlotOptions.view),
 });
 
-const plotConfigSchema = z.strictObject({
+const plotTypeEnum = z.enum(['2D', '3D'])
+
+const plotConfigCommonSchema = {
 	xMin: z.number(),
 	xMax: z.number(),
-	sampleCount: z.number(),
+	sampleCountPerAxis: z.number(),
 	functions: functionConfigSchema,
 	constants: constantConfigSchema.optional(),
 	options: plotOptionsSchema.default(defaultPlotOptions),
-});
+};
+
+const plotConfigSchema = z.discriminatedUnion('type', [
+	z.strictObject({
+		type: plotTypeEnum.extract(['2D']),
+		...plotConfigCommonSchema
+	}),
+	z.strictObject({
+		type: plotTypeEnum.extract(['3D']),
+		yMin: z.number(),
+		yMax: z.number(),
+		...plotConfigCommonSchema
+	}),
+]);
 
 export function parsePlotConfig(source: string) {
 	const yaml = parseYaml(source);
@@ -110,9 +131,19 @@ export function parsePlotConfig(source: string) {
 		throw new ConfigError(msg);
 	}
 
-	let { functions, ...rest } = zodResult.data;
+	let { functions, type, ...rest } = zodResult.data;
 	if (typeof functions == 'string') {
 		functions = [{ name: 'f', def: functions }];
+	}
+
+	if (type == '2D') {
+		return {
+			type,
+			yMin: 0,
+			yMax: 0,
+			functions,
+			...rest
+		} as PlotConfig
 	}
 
 	return {

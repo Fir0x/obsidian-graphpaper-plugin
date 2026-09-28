@@ -13,58 +13,55 @@ export type ConstantDef = {
 	value: number
 }
 
-export class MathInterpreter {
-	constants: ConstantDef[];
+const reservedValueIdentifiersMap = new Map<string, number>();
+reservedValueIdentifiersMap.set('e', Math.E);
+reservedValueIdentifiersMap.set('pi', Math.PI);
+
+const reservedCallIdentifiersMap = new Map<string, (...x: number[]) => number>();
+reservedCallIdentifiersMap.set('sqrt', Math.sqrt);
+reservedCallIdentifiersMap.set('log', Math.log);
+reservedCallIdentifiersMap.set('cos', Math.cos);
+reservedCallIdentifiersMap.set('acos', Math.acos);
+reservedCallIdentifiersMap.set('sin', Math.sin);
+reservedCallIdentifiersMap.set('asin', Math.asin);
+reservedCallIdentifiersMap.set('tan', Math.tan);
+reservedCallIdentifiersMap.set('atan', Math.atan);
+
+class MathInterpreter {
+	constants: Map<string, number>;
 	currentExpr?: FunctionConfig;
 
 	constructor(constants: ConstantDef[]) {
+		this.constants = new Map<string, number>();
 		if (constants) {
-			let constantNames = new Set<string>();
 			for (let constant of constants) {
-				if (constantNames.has(constant.name)) {
+				if (this.constants.has(constant.name)) {
 					throw new InterpreterError(`Constant with name '${constant.name}' already exists. Constants must have a unique name.`);
-				} else if (['x', 'e', 'pi'].includes(constant.name)) {
+				} else if (reservedValueIdentifiersMap.has(constant.name) || ['x', 'y'].contains(constant.name)) {
 					throw new InterpreterError(`Constant cannot have reserved name '${constant.name}'.`)
 				} else {
-					constantNames.add(constant.name);
+					this.constants.set(constant.name, constant.value);
 				}
 			}
 		}
-
-		this.constants = constants;
 	}
 
-	interpret(expr: FunctionConfig, xValues: number[]) {
-		this.currentExpr = expr;
-
-		let tokens = lexMathExpr(expr.def);
-		let parser = new Parser.MathParser(tokens);
-		const root = parser.parse();
-
-		let results = [];
-		for (const x of xValues) {
-			results.push(this.evaluateAst(root, x));
-		}
-
-		return results;
-	}
-
-	private evaluateAst(node: Parser.AstNode, x: number): number {
+	protected evaluateAst(node: Parser.AstNode): number {
 		switch (node.type) {
 			case Parser.AstNodeType.Literal:
 				return node.value;
 			case Parser.AstNodeType.Identifier:
-				return this.resolveValueIdentifier(node.name, x)!;
+				return this.resolveValueIdentifier(node.name)!;
 			case Parser.AstNodeType.Call:
 				let evaluatedArgs: number[] = [];
 				for (const argNode of node.args) {
-					evaluatedArgs.push(this.evaluateAst(argNode, x));
+					evaluatedArgs.push(this.evaluateAst(argNode));
 				}
 
 				return this.resolveCallIdentifier(node.identifier)(...evaluatedArgs);
 			case Parser.AstNodeType.BinaryOp: {
-				const left = this.evaluateAst(node.left, x);
-				const right = this.evaluateAst(node.right, x);
+				const left = this.evaluateAst(node.left);
+				const right = this.evaluateAst(node.right);
 				switch (node.opType) {
 					case Parser.BinaryOp.Add: return left + right;
 					case Parser.BinaryOp.Subtract: return left - right;
@@ -74,7 +71,7 @@ export class MathInterpreter {
 				}
 			}
 			case Parser.AstNodeType.UnaryOp: {
-				const right = this.evaluateAst(node.right, x);
+				const right = this.evaluateAst(node.right);
 				switch (node.opType) {
 					case Parser.UnaryOp.Negate: return -right;
 				}
@@ -82,32 +79,70 @@ export class MathInterpreter {
 		}
 	}
 
-	private resolveValueIdentifier(identifier: string, x: number) {
-		switch (identifier) {
-			case 'x': return x;
-			case 'e': return Math.E;
-			case 'pi': return Math.PI;
-			default:
-				const constant = this.constants.find((constant) => constant.name === identifier);
-				if (constant) {
-					return constant.value;
-				}
-
-				throw new InterpreterError(`Unknown identifier '${identifier}' in function '${this.currentExpr!.name}'.`);
+	protected resolveValueIdentifier(identifier: string): number {
+		if (reservedValueIdentifiersMap.has(identifier)) {
+			return reservedValueIdentifiersMap.get(identifier)!;
 		}
+
+		if (this.constants.has(identifier)) {
+			return this.constants.get(identifier)!;
+		}
+
+		throw new InterpreterError(`Unknown identifier '${identifier}' in function '${this.currentExpr!.name}'.`);
 	}
 
-	private resolveCallIdentifier(identifier: string): (...x: number[]) => number {
-		switch (identifier) {
-			case 'sqrt': return Math.sqrt;
-			case 'log': return Math.log;
-			case 'cos': return Math.cos;
-			case 'acos': return Math.acos;
-			case 'sin': return Math.sin;
-			case 'asin': return Math.asin;
-			case 'tan': return Math.tan;
-			case 'atan': return Math.atan;
-			default: throw new InterpreterError(`Unknown identifier '${identifier}' in function '${this.currentExpr!.name}'.`);
+	protected resolveCallIdentifier(identifier: string): (...x: number[]) => number {
+		if (reservedCallIdentifiersMap.has(identifier)) {
+			return reservedCallIdentifiersMap.get(identifier)!;
 		}
+
+		throw new InterpreterError(`Unknown identifier '${identifier}' in function '${this.currentExpr!.name}'.`);
 	}
 }
+
+export class MathInterpreterOneVar extends MathInterpreter {
+	currentX?: number;
+
+	interpret(expr: FunctionConfig, xValues: number[]): number[] {
+		this.currentExpr = expr;
+
+		let tokens = lexMathExpr(expr.def);
+		let parser = new Parser.MathParser(tokens);
+		const root = parser.parse();
+
+		let results = [];
+		for (const x of xValues) {
+			this.constants.set('x', x);
+			results.push(this.evaluateAst(root));
+		}
+
+		return results;
+	}
+}
+
+export class MathInterpreterTwoVar extends MathInterpreter {
+	currentX?: number;
+	currentY?: number;
+
+	interpret(expr: FunctionConfig, xValues: number[], yValues: number[]): number[][] {
+		this.currentExpr = expr;
+
+		let tokens = lexMathExpr(expr.def);
+		let parser = new Parser.MathParser(tokens);
+		const root = parser.parse();
+
+		let results = [];
+		for (const x of xValues) {
+			let tmp = []
+			for (const y of yValues) {
+				this.constants.set('x', x);
+				this.constants.set('y', y);
+				tmp.push(this.evaluateAst(root));
+			}
+			results.push(tmp)
+		}
+
+		return results;
+	}
+}
+
