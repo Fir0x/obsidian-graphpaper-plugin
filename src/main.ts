@@ -11,11 +11,11 @@ import {
 	GraphpaperSettingTab,
 } from './settings';
 
-import * as Plotly from 'plotly.js-dist-min';
 import { LexerError, TokenType } from './mathLexer';
 import { ParserError } from './mathParser';
-import { MathInterpreter, InterpreterError, ConstantDef } from './mathInterpreter';
-import { ConfigError, PlotConfig, parsePlotConfig, ViewOptions, ConstantConfig } from './plotConfigParser';
+import { InterpreterError } from './mathInterpreter';
+import { ConfigError, PlotConfig, parsePlotConfig, ConstantConfig } from './plotConfigParser';
+import { Plot, PlotOneVar, PlotTwoVar } from './plots';
 
 
 function displayError(error: any, container: HTMLDivElement) {
@@ -74,16 +74,8 @@ function displayError(error: any, container: HTMLDivElement) {
 }
 
 type PlotInfo = {
-	config: PlotConfig,
-	plotDiv: HTMLDivElement,
+	plot: Plot,
 	constantsDiv?: HTMLDivElement
-	// Needed because of a Plotly bug in their autorange system on update/react (see isssue #7024)
-	plotlyLayout: Partial<Plotly.Layout>
-}
-
-type ConstantOverride = {
-	name: string,
-	value: number
 }
 
 export default class GraphpaperPlugin extends Plugin {
@@ -99,16 +91,15 @@ export default class GraphpaperPlugin extends Plugin {
 		this.registerMarkdownCodeBlockProcessor('graphpaper', (source, el, ctx) => {
 			try {
 				let infos = parsePlotConfig(source);
-				const plot = this.generatePlot(infos, el);
-				this.plots.push(plot);
+				const plotInfo = this.generatePlot(el, infos);
+				this.plots.push(plotInfo);
 
 				const plugin = this;
 				ctx.addChild(new (class extends MarkdownRenderChild {
 					onunload() {
-						Plotly.purge(plot.plotDiv)
-						plugin.plots.remove(plot);
+						plugin.plots.remove(plotInfo);
 					}
-				})(plot.plotDiv));
+				})(plotInfo.plot.getContainer()));
 			} catch (error) {
 				const container = el.createDiv({ cls: 'graphpaper-error' });
 				displayError(error, container);
@@ -131,80 +122,35 @@ export default class GraphpaperPlugin extends Plugin {
 	}
 
 	updatePlotsRender() {
-		for (const plot of this.plots) {
-			Plotly.update(plot.plotDiv, {
-				line: {
-					dash: this.settings.curveLineType
-				}
-			}, {});
+		for (const plotInfo of this.plots) {
+			plotInfo.plot.updateRender();
 		}
 	}
 
-	private generatePlot(config: PlotConfig, el: HTMLElement) {
+	private generatePlot(el: HTMLElement, config: PlotConfig): PlotInfo {
 		const rootContainer = el.createDiv({ cls: 'graphpaper-root' });
-		const [xValues, yValuesPerFunc] = this.generateFunctionsData(config)
-
-		let plotlyData: Plotly.Data[] = [];
-		for (let i = 0; i < yValuesPerFunc.length; ++i) {
-			const yValues = yValuesPerFunc[i];
-			const functionConfig = config.functions[i]!;
-			plotlyData.push({
-				x: xValues,
-				y: yValues,
-				type: 'scatter',
-				mode: 'lines',
-				name: functionConfig.name,
-				line: {
-					dash: this.settings.curveLineType,
-				}
-			});
-		}
-
-		const [plotlyLayout, plotlyConfig] = plotlySettingsFromConfig(config, xValues, yValuesPerFunc);
 
 		const plotlyContainer = rootContainer.createDiv({ cls: 'graphpaper-plot' });
-		Plotly.newPlot(plotlyContainer, plotlyData, structuredClone(plotlyLayout), plotlyConfig);
-
-		let plot: PlotInfo = {
-			plotDiv: plotlyContainer,
-			config,
-			plotlyLayout,
+		let plot;
+		if (config.type == '1D') {
+			plot = new PlotOneVar(plotlyContainer, config, this.settings);
+		} else {
+			plot = new PlotTwoVar(plotlyContainer, config, this.settings);
 		}
+
+		let plotInfo: PlotInfo = {
+			plot
+		};
 
 		if (config.constants) {
-			const constantsContainer = this.createConstantsContainer(rootContainer, config.constants, plot);
-			plot.constantsDiv = constantsContainer;
+			const constantsContainer = this.createConstantsContainer(rootContainer, config.constants, plotInfo);
+			plotInfo.constantsDiv = constantsContainer;
 		}
 
-		return plot
+		return plotInfo
 	}
 
-	private generateFunctionsData(config: PlotConfig, constantOverrides?: ConstantOverride[]): [number[], number[][]] {
-		const sampleOffset = Math.max(1e-10, (config.xMax - config.xMin) / config.sampleCount);
-		const xValues = Array.from({ length: config.sampleCount + 1 }, (_, i) => config.xMin + i * sampleOffset);
-
-		let constants: ConstantDef[] = []
-		if (config.constants) {
-			for (const constantConfig of config.constants) {
-				const constantOverride = constantOverrides?.find((value) => value.name === constantConfig.name);
-				if (constantOverride) {
-					constants.push({ name: constantConfig.name, value: constantOverride.value });
-				} else {
-					constants.push({ name: constantConfig.name, value: constantConfig.value });
-				}
-			}
-		}
-
-		let interpreter = new MathInterpreter(constants);
-		let yValuesPerFunc = []
-		for (const expr of config.functions) {
-			yValuesPerFunc.push(interpreter.interpret(expr, xValues));
-		}
-
-		return [xValues, yValuesPerFunc];
-	}
-
-	private createConstantsContainer(rootContainer: HTMLElement, constantConfigs: ConstantConfig[], plot: PlotInfo) {
+	private createConstantsContainer(rootContainer: HTMLElement, constantConfigs: ConstantConfig[], plotInfo: PlotInfo) {
 		const constantsContainer = rootContainer.createDiv({ cls: 'graphpaper-constants' });
 		for (const constantConfig of constantConfigs) {
 			// No need for sliders if no range is defined
@@ -218,7 +164,7 @@ export default class GraphpaperPlugin extends Plugin {
 				.setLimits(constantConfig.range.min, constantConfig.range.max, constantConfig.range.step)
 				.setValue(constantConfig.value)
 				.setInstant(true)
-				.onChange((newValue) => this.updatePlotConstant(plot, constantConfig.name, newValue));
+				.onChange((newValue) => plotInfo.plot.updateConstant(constantConfig.name, newValue));
 
 			let sliderEl = slider.sliderEl;
 			sliderEl.addEventListener('dblclick', () => {
@@ -274,86 +220,6 @@ export default class GraphpaperPlugin extends Plugin {
 
 		return constantsContainer;
 	}
-
-	private updatePlotConstant(plot: PlotInfo, name: string, value: number) {
-		const [xValues, yValuesPerFunc] = this.generateFunctionsData(plot.config, [{ name, value }]);
-		this.updatePlotValues(plot, xValues, yValuesPerFunc);
-	}
-
-	private updatePlotValues(plot: PlotInfo, xValues: number[], yValuesPerFunc: number[][]) {
-		for (let i = 0; i < yValuesPerFunc.length; ++i) {
-			const yValues = yValuesPerFunc[i]!;
-			Plotly.update(plot.plotDiv, {
-				x: [xValues],
-				y: [yValues],
-			}, structuredClone(plot.plotlyLayout), i);
-		}
-	}
 }
 
-function plotlySettingsFromConfig(config: PlotConfig, xValues: number[], yValuesPerFunc: number[][]): [Partial<Plotly.Layout>, Partial<Plotly.Config>] {
-	let plotlyLayout: Partial<Plotly.Layout> = {
-		margin: { t: 20 },
-	};
-
-	let plotlyConfig: Partial<Plotly.Config> = {
-		responsive: true,
-	};
-
-	viewConfigToPlotly(config.options.view, plotlyLayout, xValues, yValuesPerFunc);
-
-	return [plotlyLayout, plotlyConfig];
-}
-
-function viewConfigToPlotly(viewConfig: ViewOptions, plotlyLayout: Partial<Plotly.Layout>, xValues: number[], yValuesPerFunc: number[][]) {
-	{
-		const xAxisConfig = viewConfig.xAxis;
-		let plotlyAxis: Partial<Plotly.LayoutAxis> = {};
-
-		const xMin = xAxisConfig.autoRange
-			? xAxisConfig.min ?? xValues.reduce((min, value) => value < min ? value : min)
-			: xAxisConfig.min
-		const xMax = xAxisConfig.autoRange
-			? xAxisConfig.max ?? xValues.reduce((max, value) => value > max ? value : max)
-			: xAxisConfig.max;
-
-		plotlyAxis.range = [xMin, xMax];
-
-		if (xAxisConfig.disableZoom) {
-			plotlyAxis.fixedrange = true;
-		}
-
-		plotlyLayout.xaxis = plotlyAxis;
-	}
-
-	{
-		const yAxisConfig = viewConfig.yAxis;
-		let plotlyAxis: Partial<Plotly.LayoutAxis> = {};
-
-		const reduceMin = (globalMin: number, yValues: number[]) => {
-			const localMin = yValues.reduce((min, y) => y < min ? y : min)
-			return localMin < globalMin ? localMin : globalMin;
-		}
-
-		const reduceMax = (globalMin: number, yValues: number[]) => {
-			const localMax = yValues.reduce((max, y) => y > max ? y : max)
-			return localMax > globalMin ? localMax : globalMin;
-		}
-
-		const yMin = yAxisConfig.autoRange
-			? yAxisConfig.min
-			: yAxisConfig.min ?? yValuesPerFunc.reduce(reduceMin, Infinity);
-		const yMax = yAxisConfig.autoRange
-			? yAxisConfig.max
-			: yAxisConfig.max ?? yValuesPerFunc.reduce(reduceMax, -Infinity);
-
-		plotlyAxis.range = [yMin, yMax];
-
-		if (yAxisConfig.disableZoom) {
-			plotlyAxis.fixedrange = true;
-		}
-
-		plotlyLayout.yaxis = plotlyAxis;
-	}
-}
 

@@ -39,9 +39,12 @@ export type PlotOptions = {
 }
 
 export type PlotConfig = {
+	type: '1D' | '2D',
 	xMin: number,
 	xMax: number,
-	sampleCount: number,
+	yMin: number,
+	yMax: number,
+	sampleCountPerAxis: number,
 	functions: FunctionConfig[],
 	constants: ConstantConfig[],
 	options: PlotOptions,
@@ -90,14 +93,29 @@ const plotOptionsSchema = z.strictObject({
 	}).default(defaultPlotOptions.view),
 });
 
-const plotConfigSchema = z.strictObject({
+const plotTypeEnum = z.enum(['1D', '2D'])
+
+const plotConfigCommonSchema = {
 	xMin: z.number(),
 	xMax: z.number(),
-	sampleCount: z.number(),
+	sampleCountPerAxis: z.number(),
 	functions: functionConfigSchema,
 	constants: constantConfigSchema.optional(),
 	options: plotOptionsSchema.default(defaultPlotOptions),
-});
+};
+
+const plotConfigSchema = z.discriminatedUnion('type', [
+	z.strictObject({
+		type: plotTypeEnum.extract(['1D']),
+		...plotConfigCommonSchema
+	}),
+	z.strictObject({
+		type: plotTypeEnum.extract(['2D']),
+		yMin: z.number(),
+		yMax: z.number(),
+		...plotConfigCommonSchema
+	}),
+]);
 
 export function parsePlotConfig(source: string) {
 	const yaml = parseYaml(source);
@@ -110,9 +128,19 @@ export function parsePlotConfig(source: string) {
 		throw new ConfigError(msg);
 	}
 
-	let { functions, ...rest } = zodResult.data;
+	let { functions, type, ...rest } = zodResult.data;
 	if (typeof functions == 'string') {
 		functions = [{ name: 'f', def: functions }];
+	}
+
+	if (type == '1D') {
+		return {
+			type,
+			yMin: 0,
+			yMax: 0,
+			functions,
+			...rest
+		} as PlotConfig
 	}
 
 	return {
