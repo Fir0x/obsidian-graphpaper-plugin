@@ -1,5 +1,5 @@
-import { parseYaml } from 'obsidian';
-import { z } from 'zod';
+import { NumberValue, parseYaml } from 'obsidian';
+import { boolean, z } from 'zod';
 
 export class ConfigError extends SyntaxError {
 	constructor(message: string) {
@@ -33,6 +33,7 @@ export type ViewOptions = {
 	xAxis: AxisOptions,
 	yAxis: AxisOptions,
 	zAxis: AxisOptions,
+	splitPlots: 'no' | 'auto' | [number, number],
 }
 
 export type PlotOptions = {
@@ -63,6 +64,7 @@ const defaultPlotOptions: PlotOptions = {
 		xAxis: defaultAxisOptions,
 		yAxis: defaultAxisOptions,
 		zAxis: defaultAxisOptions,
+		splitPlots: 'no',
 	}
 }
 
@@ -93,6 +95,13 @@ const plotOptionsSchema = z.strictObject({
 		xAxis: plotAxisConfigSchema.default(defaultPlotOptions.view.xAxis),
 		yAxis: plotAxisConfigSchema.default(defaultPlotOptions.view.yAxis),
 		zAxis: plotAxisConfigSchema.default(defaultPlotOptions.view.zAxis),
+		splitPlots: z.union([
+			z.enum(['no', 'auto']),
+			z.string()
+				.regex(/^\d+:\d+$/)
+				.transform((value) => { const match = /^(\d+):(\d+)$/.exec(value)!; return [Number(match[1]), Number(match[2])] })
+				.pipe(z.tuple([z.int().nonnegative(), z.int().nonnegative()])),
+		]).default('no'),
 	}).default(defaultPlotOptions.view),
 });
 

@@ -97,6 +97,7 @@ export default class GraphpaperPlugin extends Plugin {
 				const plugin = this;
 				ctx.addChild(new (class extends MarkdownRenderChild {
 					onunload() {
+						plotInfo.plot.release();
 						plugin.plots.remove(plotInfo);
 					}
 				})(plotInfo.plot.getContainer()));

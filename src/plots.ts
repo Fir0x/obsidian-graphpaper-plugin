@@ -1,5 +1,5 @@
 import * as Plotly from 'plotly.js-dist-min';
-import { PlotConfig, ViewOptions } from './plotConfigParser';
+import { PlotConfig } from './plotConfigParser';
 import { ConstantDef, MathInterpreterOneVar, MathInterpreterTwoVar } from './mathInterpreter';
 import { GraphpaperPluginSettings } from './settings';
 
@@ -42,11 +42,19 @@ export class PlotOneVar extends Plot {
 	}
 
 	updateRender(): void {
+		let layoutUpdate: Partial<Plotly.Layout> = {};
+		if (this.config.options.view.splitPlots == 'auto') {
+			layoutUpdate.grid = {};
+			const funcCount = this.config.functions.length;
+			layoutUpdate.grid.columns = Math.min(funcCount, this.pluginSettings.splitPlotAutoMaxColumns);
+			layoutUpdate.grid.rows = Math.ceil(funcCount / layoutUpdate.grid.columns);
+		}
+
 		Plotly.update(this.container, {
 			line: {
 				dash: this.pluginSettings.curveLineType
 			}
-		}, {});
+		}, layoutUpdate);
 	}
 
 	protected generatePlotlyInfos(): [Plotly.Data[], Partial<Plotly.Layout>, Partial<Plotly.Config>] {
@@ -56,9 +64,12 @@ export class PlotOneVar extends Plot {
 		for (let i = 0; i < yValuesPerFunc.length; ++i) {
 			const yValues = yValuesPerFunc[i];
 			const functionConfig = this.config.functions[i]!;
+			const axisIndex = this.config.options.view.splitPlots == 'no' ? 1 : i + 1;
 			plotlyData.push({
 				x: xValues,
 				y: yValues,
+				xaxis: axisIndex == 1 ? 'x' : `x${axisIndex}`,
+				yaxis: axisIndex == 1 ? 'y' : `y${axisIndex}`,
 				type: 'scatter',
 				mode: 'lines',
 				name: functionConfig.name,
@@ -117,12 +128,13 @@ export class PlotOneVar extends Plot {
 			responsive: true,
 		};
 
-		this.viewConfigToPlotly(this.config.options.view, plotlyLayout, xValues, yValuesPerFunc);
+		this.viewConfigToPlotly(plotlyLayout, xValues, yValuesPerFunc);
 
 		return [plotlyLayout, plotlyConfig];
 	}
 
-	private viewConfigToPlotly(viewConfig: ViewOptions, plotlyLayout: Partial<Plotly.Layout>, xValues: number[], yValuesPerFunc: number[][]) {
+	private viewConfigToPlotly(plotlyLayout: Partial<Plotly.Layout>, xValues: number[], yValuesPerFunc: number[][]) {
+		let viewConfig = this.config.options.view;
 		{
 			const xAxisConfig = viewConfig.xAxis;
 			let plotlyAxis: Partial<Plotly.LayoutAxis> = {};
@@ -172,6 +184,19 @@ export class PlotOneVar extends Plot {
 
 			plotlyLayout.yaxis = plotlyAxis;
 		}
+
+		if (viewConfig.splitPlots != 'no') {
+			plotlyLayout.grid = {};
+			if (viewConfig.splitPlots == 'auto') {
+				let funcCount = this.config.functions.length;
+				plotlyLayout.grid.columns = Math.min(funcCount, this.pluginSettings.splitPlotAutoMaxColumns);
+				plotlyLayout.grid.rows = Math.ceil(funcCount / plotlyLayout.grid.columns);
+			} else {
+				plotlyLayout.grid.columns = viewConfig.splitPlots[0];
+				plotlyLayout.grid.rows = viewConfig.splitPlots[1];
+			}
+			plotlyLayout.grid.pattern = 'independent';
+		}
 	}
 }
 
@@ -182,21 +207,69 @@ export class PlotTwoVar extends Plot {
 	}
 
 	updateRender(): void {
+		if (this.config.options.view.splitPlots != 'auto') {
+			return;
+		}
+
+		let layoutUpdate: Partial<Plotly.Layout> = {};
+		const sceneCount = this.config.functions.length;
+		const funcCount = this.config.functions.length;
+		const columns = Math.min(funcCount, this.pluginSettings.splitPlotAutoMaxColumns);
+		const rows = Math.ceil(funcCount / columns);
+
+		const cellWidth = 1.0 / columns;
+		const cellHeight = 1.0 / rows;
+		const barStripWidth = 0.1;
+		const plotWidth = cellWidth - barStripWidth;
+
+		for (let i = 0; i < sceneCount; ++i) {
+			const rowIdx = Math.floor(i / columns);
+			const columnIdx = i % columns;
+			const x0 = columnIdx * cellWidth;
+			const y0 = 1 - (rowIdx + 1) * cellHeight;
+
+			const sceneId: any = i == 0 ? 'scene' : `scene${i + 1}`;
+			layoutUpdate[sceneId] = {};
+			const scene = layoutUpdate[sceneId]! as Plotly.Scene;
+			scene.domain = {
+				x: [x0, x0 + plotWidth],
+				y: [y0, y0 + cellHeight],
+			}
+
+			{
+				const coloraxisId: any = i == 0 ? 'coloraxis' : `coloraxis${i + 1}`;
+				layoutUpdate[coloraxisId] = {
+					colorscale: 'Jet',
+					colorbar: {
+						x: x0 + plotWidth,
+						y: y0 + cellHeight / 2.0,
+						len: cellHeight,
+					}
+				}
+			}
+		}
+
+		Plotly.update(this.container, {}, layoutUpdate);
 	}
 
 	protected generatePlotlyInfos(): [Plotly.Data[], Partial<Plotly.Layout>, Partial<Plotly.Config>] {
 		const values = this.generateFunctionsData();
 		let plotlyData: Plotly.Data[] = [];
 		const [xValues, yValues, zValuesPerFunc] = values;
+
 		for (let i = 0; i < zValuesPerFunc.length; ++i) {
 			const zValues = zValuesPerFunc[i];
 			const functionConfig = this.config.functions[i]!;
+			const sceneIndex = this.config.options.view.splitPlots == 'no' ? 1 : i + 1;
+
 			plotlyData.push({
 				x: xValues,
 				y: yValues,
 				z: zValues,
 				type: 'surface',
 				name: functionConfig.name,
+				scene: sceneIndex == 1 ? 'scene' : `scene${sceneIndex}`,
+				coloraxis: sceneIndex == 1 ? 'coloraxis' : `coloraxis${sceneIndex}`,
 			});
 		}
 
@@ -261,62 +334,109 @@ export class PlotTwoVar extends Plot {
 
 	private viewConfigToPlotly(plotlyLayout: Partial<Plotly.Layout>, xValues: number[], yValues: number[], zValuesPerFunc: number[][][]) {
 		let viewConfig = this.config.options.view;
-		plotlyLayout.scene = {}
-		{
-			plotlyLayout.scene.xaxis = {}
-			const xAxisConfig = viewConfig.xAxis;
-
-			const xMin = xAxisConfig.autoRange
-				? xAxisConfig.min ?? xValues.reduce((min, value) => value < min ? value : min)
-				: xAxisConfig.min
-			const xMax = xAxisConfig.autoRange
-				? xAxisConfig.max ?? xValues.reduce((max, value) => value > max ? value : max)
-				: xAxisConfig.max;
-
-			plotlyLayout.scene.xaxis.range = [xMin, xMax];
-		}
-
-		{
-			const yAxisConfig = viewConfig.yAxis;
-			plotlyLayout.scene.yaxis = {}
-
-			const yMin = yAxisConfig.autoRange
-				? yAxisConfig.min ?? yValues.reduce((min, value) => value < min ? value : min)
-				: yAxisConfig.min
-			const yMax = yAxisConfig.autoRange
-				? yAxisConfig.max ?? yValues.reduce((max, value) => value > max ? value : max)
-				: yAxisConfig.max;
-
-			plotlyLayout.scene.yaxis.range = [yMin, yMax];
-		}
-
-		{
-			const zAxisConfig = viewConfig.zAxis;
-			plotlyLayout.scene.zaxis = {}
-
-
-			let zMin: number | null = Infinity;
-			let zMax: number | null = -Infinity;
-			if (zAxisConfig.autoRange) {
-				zMin = zAxisConfig.min;
-				zMax = zAxisConfig.max;
+		const sceneCount = viewConfig.splitPlots == 'no' ? 1 : this.config.functions.length;
+		let rows = 1;
+		let columns = 1;
+		if (this.config.options.view.splitPlots != 'no') {
+			if (this.config.options.view.splitPlots == 'auto') {
+				const funcCount = this.config.functions.length;
+				columns = Math.min(funcCount, this.pluginSettings.splitPlotAutoMaxColumns);
+				rows = Math.ceil(funcCount / columns);
 			} else {
-				let min = Infinity;
-				let max = -Infinity;
-				for (let i = 0; i < zValuesPerFunc.length; ++i) {
-					for (let j = 0; j < zValuesPerFunc[i]!.length; ++j) {
-						for (let k = 0; k < zValuesPerFunc[i]![j]!.length; ++k) {
-							min = Math.min(zValuesPerFunc[i]![j]![k]!, min);
-							max = Math.max(zValuesPerFunc[i]![j]![k]!, min);
-						}
-					}
-				}
+				rows = this.config.options.view.splitPlots[0];
+				columns = this.config.options.view.splitPlots[1];
+			}
+		}
+		const cellWidth = 1.0 / columns;
+		const cellHeight = 1.0 / rows;
+		const barStripWidth = 0.1;
+		const plotWidth = cellWidth - barStripWidth;
 
-				zMin = zAxisConfig.min ?? min;
-				zMax = zAxisConfig.max ?? max;
+		for (let i = 0; i < sceneCount; ++i) {
+			const rowIdx = Math.floor(i / columns);
+			const columnIdx = i % columns;
+			const x0 = columnIdx * cellWidth;
+			const y0 = 1 - (rowIdx + 1) * cellHeight;
+
+			const sceneId: any = i == 0 ? 'scene' : `scene${i + 1}`;
+			plotlyLayout[sceneId] = {};
+			const scene = plotlyLayout[sceneId]! as Plotly.Scene;
+			scene.domain = {
+				x: [x0, x0 + plotWidth],
+				y: [y0, y0 + cellHeight],
 			}
 
-			plotlyLayout.scene.zaxis.range = [zMin, zMax];
+			{
+				scene.xaxis = {}
+				const xAxisConfig = viewConfig.xAxis;
+
+				const xMin = xAxisConfig.autoRange
+					? xAxisConfig.min ?? xValues.reduce((min, value) => value < min ? value : min)
+					: xAxisConfig.min
+				const xMax = xAxisConfig.autoRange
+					? xAxisConfig.max ?? xValues.reduce((max, value) => value > max ? value : max)
+					: xAxisConfig.max;
+
+				scene.xaxis.range = [xMin, xMax];
+			}
+
+			{
+				const yAxisConfig = viewConfig.yAxis;
+				scene.yaxis = {}
+
+				const yMin = yAxisConfig.autoRange
+					? yAxisConfig.min ?? yValues.reduce((min, value) => value < min ? value : min)
+					: yAxisConfig.min
+				const yMax = yAxisConfig.autoRange
+					? yAxisConfig.max ?? yValues.reduce((max, value) => value > max ? value : max)
+					: yAxisConfig.max;
+
+				scene.yaxis.range = [yMin, yMax];
+			}
+
+			{
+				const zAxisConfig = viewConfig.zAxis;
+				scene.zaxis = {}
+
+
+				let zMin: number | null = Infinity;
+				let zMax: number | null = -Infinity;
+				if (zAxisConfig.autoRange) {
+					zMin = zAxisConfig.min;
+					zMax = zAxisConfig.max;
+				} else {
+					let min = Infinity;
+					let max = -Infinity;
+					for (let i = 0; i < zValuesPerFunc.length; ++i) {
+						for (let j = 0; j < zValuesPerFunc[i]!.length; ++j) {
+							for (let k = 0; k < zValuesPerFunc[i]![j]!.length; ++k) {
+								min = Math.min(zValuesPerFunc[i]![j]![k]!, min);
+								max = Math.max(zValuesPerFunc[i]![j]![k]!, min);
+							}
+						}
+					}
+
+					zMin = zAxisConfig.min ?? min;
+					zMax = zAxisConfig.max ?? max;
+				}
+
+				scene.zaxis.range = [zMin, zMax];
+			}
+
+			{
+				const coloraxisId: any = i == 0 ? 'coloraxis' : `coloraxis${i + 1}`;
+				plotlyLayout[coloraxisId] = {
+					colorscale: 'Jet',
+					colorbar: {
+						x: x0 + plotWidth,
+						xanchor: 'left',
+						y: y0 + cellHeight / 2.0,
+						yanchor: 'middle',
+						len: cellHeight,
+						lenmode: 'fraction'
+					}
+				}
+			}
 		}
 	}
 }
