@@ -20,3 +20,15 @@
 	color: var(--text-normal);
 	white-space: nowrap;
 }
+
+.graphpaper-vedit-section {
+	display: flex;
+	flex-direction: column;
+	gap: 1ch;
+	margin-top: 1ch;
+	margin-bottom: 1ch;
+}
+
+.graphpaper-vedit-label {
+	margin-right: 1ch;
+}

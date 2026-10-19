@@ -16,6 +16,7 @@ import { ParserError } from './mathParser';
 import { InterpreterError } from './mathInterpreter';
 import { ConfigError, PlotConfig, parsePlotConfig, ConstantConfig } from './plotConfigParser';
 import { Plot, PlotOneVar, PlotTwoVar } from './plots';
+import { VisualEditor } from './visualEditor';
 
 
 function displayError(error: any, container: HTMLDivElement) {
@@ -105,6 +106,12 @@ export default class GraphpaperPlugin extends Plugin {
 				const container = el.createDiv({ cls: 'graphpaper-error' });
 				displayError(error, container);
 			}
+		});
+
+		this.addCommand({
+			id: 'graphpaper-insert',
+			name: 'Insert Graphpaper plot',
+			callback: () => new VisualEditor(this.app).open()
 		});
 	}
 

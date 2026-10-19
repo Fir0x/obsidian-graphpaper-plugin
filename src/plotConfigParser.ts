@@ -1,5 +1,5 @@
-import { NumberValue, parseYaml } from 'obsidian';
-import { boolean, z } from 'zod';
+import { parseYaml } from 'obsidian';
+import { z } from 'zod';
 
 export class ConfigError extends SyntaxError {
 	constructor(message: string) {
@@ -44,8 +44,8 @@ export type PlotConfig = {
 	type: '2D' | '3D',
 	xMin: number,
 	xMax: number,
-	yMin: number,
-	yMax: number,
+	yMin?: number,
+	yMax?: number,
 	sampleCountPerAxis: number,
 	functions: FunctionConfig[],
 	constants: ConstantConfig[],
@@ -59,7 +59,7 @@ const defaultAxisOptions: AxisOptions = {
 	autoRange: true,
 };
 
-const defaultPlotOptions: PlotOptions = {
+export const defaultPlotOptions: PlotOptions = {
 	view: {
 		xAxis: defaultAxisOptions,
 		yAxis: defaultAxisOptions,
