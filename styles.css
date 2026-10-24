@@ -21,14 +21,103 @@
 	white-space: nowrap;
 }
 
-.graphpaper-vedit-section {
+.graphpaper-vedit-section,
+.graphpaper-vedit-subsection {
 	display: flex;
 	flex-direction: column;
-	gap: 1ch;
-	margin-top: 1ch;
-	margin-bottom: 1ch;
+	gap: var(--size-4-2);
+}
+
+.graphpaper-vedit-section {
+	margin-top: var(--size-4-2);
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-4);
+    background-color: var(--setting-items-background);
+    border-radius: var(--setting-items-radius);
+    corner-shape: var(--corner-shape);
+    border: var(--setting-items-border-width) solid var(--setting-items-border-color);
+}
+
+.graphpaper-vedit-label-container {
+	display: flex;
+	align-items: center;
 }
 
 .graphpaper-vedit-label {
 	margin-right: 1ch;
+	color: var(--setting-item-name-color);
+	font-size: var(--setting-item-name-size);
+    font-weight: var(--setting-item-name-weight);
+    line-height: var(--line-height-tight);
 }
+
+.graphpaper-vedit-label:empty {
+	display: none;
+}
+
+.graphpaper-vedit-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.graphpaper-vedit-list:empty {
+	display: none;
+}
+
+.graphpaper-vedit-list-row {
+	display: flex;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2);
+	background-color: var(--background-secondary-alt);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	corner-shape: var(--corner-shape);
+	transition:
+		border-color 0.1s ease-in-out,
+		background-color 0.1s ease-in-out;
+}
+
+.graphpaper-vedit-list-row:hover {
+	border-color: var(--background-modifier-border-hover);
+	background-color: var(--background-modifier-hover);
+}
+
+.graphpaper-vedit-list-row:focus-within {
+	border-color: var(--background-modifier-border-focus);
+	background-color: var(--background-modifier-hover);
+}
+
+.graphpaper-vedit-list-delete {
+	flex: none;
+	color: var(--text-faint);
+}
+
+.graphpaper-vedit-list-delete:hover {
+	color: var(--text-error);
+}
+
+.graphpaper-vedit-list-content {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.graphpaper-vedit-list-add,
+.graphpaper-vedit-confirm {
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	border-radius: var(--radius-m);
+	corner-shape: var(--corner-shape);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+.graphpaper-vedit-list-add:hover,
+.graphpaper-vedit-confirm:hover {
+	background-color: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+

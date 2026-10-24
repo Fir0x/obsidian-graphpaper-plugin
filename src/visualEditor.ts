@@ -1,16 +1,15 @@
-import { App, BaseComponent, ButtonComponent, DropdownComponent, MarkdownView, Modal, Setting, stringifyYaml, TextComponent, Value } from 'obsidian';
+import { App, BaseComponent, ButtonComponent, DropdownComponent, ExtraButtonComponent, MarkdownView, Modal, stringifyYaml, TextComponent, ToggleComponent } from 'obsidian';
 import { AxisOptions, ConstantConfig, defaultPlotOptions, FunctionConfig, PlotConfig, ViewOptions } from './plotConfigParser';
 
 export class VisualEditor extends Modal {
-	funcEditorContainer: HTMLElement;
+	plotEdit: PlotConfig;
 
 	constructor(app: App, defaults?: PlotConfig) {
 		super(app);
 		this.setTitle('Graphpaper visual editor');
 
-		let plotEdit = defaults;
-		if (plotEdit === undefined) {
-			plotEdit = {
+		if (defaults === undefined) {
+			this.plotEdit = {
 				type: '2D',
 				xMin: -5,
 				xMax: 5,
@@ -19,40 +18,52 @@ export class VisualEditor extends Modal {
 				constants: [],
 				options: defaultPlotOptions
 			};
+		} else {
+			this.plotEdit = defaults;
 		}
+	}
 
-		new DropdownComponent(this.contentEl)
+	onOpen() {
+		const dropdown = new DropdownComponent(this.contentEl)
 			.addOptions({
 				'2D': '2D',
 				'3D': '3D'
 			})
-			.setValue(plotEdit.type)
-			.onChange((value: string) => {
-				plotEdit.type = value as typeof plotEdit.type;
-				let newFuncEditorContainer = this.generateFuncEditor(this.contentEl, plotEdit);
-				this.funcEditorContainer.replaceWith(newFuncEditorContainer);
-				this.funcEditorContainer = newFuncEditorContainer;
+			.setValue(this.plotEdit.type);
+
+		let dummyContainer = this.contentEl.createDiv();
+		let funcEditorContainer = this.generateFuncEditor(dummyContainer, this.plotEdit);
+
+		dropdown.onChange((value: string) => {
+			this.plotEdit.type = value as typeof this.plotEdit.type;
+			funcEditorContainer.remove();
+			funcEditorContainer = this.generateFuncEditor(dummyContainer, this.plotEdit);
+		});
+
+		new ButtonComponent(this.contentEl)
+			.setClass('graphpaper-vedit-confirm')
+			.setButtonText('Confirm')
+			.onClick(() => {
+				this.writePlotConfig(this.plotEdit);
+				this.close();
 			});
 
-		this.funcEditorContainer = this.generateFuncEditor(this.contentEl, plotEdit);
-
-		new ButtonComponent(this.contentEl).setButtonText('Confirm').onClick(() => this.writePlotConfig(plotEdit));
+		// Prevent autofocus of first focuable element.
+		// Need a delay because Obsidian focus after onOpen ends.
+		window.requestAnimationFrame(() => this.modalEl.focus());
 	}
 
 	private generateFuncEditor(containerEl: HTMLElement, plotEdit: PlotConfig): HTMLDivElement {
-		let rootEl = containerEl.createDiv();
 		if (plotEdit.type == '2D') {
-			this.generate2DFuncEditor(rootEl, plotEdit);
-		} else {
-			this.generate3DFuncEditor(rootEl, plotEdit);
+			return this.generate2DFuncEditor(containerEl, plotEdit);
 		}
 
-		return rootEl;
+		return this.generate3DFuncEditor(containerEl, plotEdit);
 	}
 
 	private generate2DFuncEditor(containerEl: HTMLElement, plotEdit: PlotConfig): HTMLDivElement {
-		let container = containerEl.createDiv()
-		let generalContainer = container.createDiv({ cls: 'graphpaper-vedit-section' });
+		const rootEl = containerEl.createDiv()
+		const generalContainer = rootEl.createDiv({ cls: 'graphpaper-vedit-section' });
 		generalContainer.setText('General');
 		new LabeledComponent(generalContainer)
 			.setLabel('X min:')
@@ -73,26 +84,26 @@ export class VisualEditor extends Modal {
 			});
 
 
-		this.generateFunctionDefsEditor(container, plotEdit);
-		this.generateConstantsEditor(containerEl, plotEdit)
+		this.generateFunctionDefsEditor(generalContainer, plotEdit);
+		this.generateConstantsEditor(rootEl, plotEdit)
 
-		let optionsContainer = containerEl.createDiv({ cls: 'graphpaper-vedit-section' });
+		const optionsContainer = rootEl.createDiv({ cls: 'graphpaper-vedit-section' });
 		optionsContainer.setText('Options');
 		this.generateAxisOptionsEditor(optionsContainer, 'X axis', plotEdit.options.view.xAxis);
 		this.generateAxisOptionsEditor(optionsContainer, 'Y axis', plotEdit.options.view.yAxis);
 		this.generateSplitOptionsEditor(optionsContainer, plotEdit.options.view);
 
-		return generalContainer;
+		return rootEl;
 	}
 
 	private generate3DFuncEditor(parentContainer: HTMLElement, plotEdit: PlotConfig): HTMLDivElement {
-		let container = parentContainer.createDiv();
+		const rootEl = parentContainer.createDiv();
 
-		return container;
+		return rootEl;
 	}
 
 	private generateFunctionDefsEditor(containerEl: HTMLElement, plotEdit: PlotConfig) {
-		let constructFunctionEdit = (containerEl: HTMLElement, functionDef: FunctionConfig) => {
+		const constructFunctionEdit = (containerEl: HTMLElement, functionDef: FunctionConfig) => {
 			new LabeledComponent(containerEl)
 				.setLabel('Name:')
 				.setElement((containerEl: HTMLElement) => {
@@ -106,14 +117,14 @@ export class VisualEditor extends Modal {
 				});
 		}
 
-		let functionDefs = new ListComponent(containerEl)
+		const functionDefs = new ListComponent(containerEl)
 			.setText('Function definitions')
 			.addStaticElement((containerEl: HTMLElement) => {
 				constructFunctionEdit(containerEl, plotEdit.functions[0]!);
 			})
 			.onAdd((containerEl: HTMLElement) => {
-				let defaultNames = ['f', 'g', 'h'];
-				let def = { name: defaultNames[plotEdit.functions.length % defaultNames.length], def: 'x' } as FunctionConfig;
+				const defaultNames = ['f', 'g', 'h'];
+				const def = { name: defaultNames[plotEdit.functions.length % defaultNames.length], def: 'x' } as FunctionConfig;
 				plotEdit.functions.push(def);
 
 				constructFunctionEdit(containerEl, def);
@@ -131,9 +142,9 @@ export class VisualEditor extends Modal {
 	}
 
 	private generateConstantsEditor(containerEl: HTMLElement, plotEdit: PlotConfig) {
-		let rootEl = containerEl.createDiv({ cls: 'graphpaper-vedit-section' });
+		const rootEl = containerEl.createDiv({ cls: 'graphpaper-vedit-section' });
 		rootEl.setText('Constants');
-		let constructConstantEdit = (containerEl: HTMLElement, constant: ConstantConfig) => {
+		const constructConstantEdit = (containerEl: HTMLElement, constant: ConstantConfig) => {
 			new LabeledComponent(containerEl)
 				.setLabel('Name:')
 				.setElement((containerEl: HTMLElement) => {
@@ -146,15 +157,15 @@ export class VisualEditor extends Modal {
 					return new NumberComponent(containerEl).setNumber(constant.value).onNumberChange((value: number) => constant.value = value);
 				});
 
-			let checkbox = new LabeledComponent<CheckboxComponent>(containerEl)
+			const toggle = new LabeledComponent<ToggleComponent>(containerEl)
 				.setLabel('Dynamic mode:')
 				.setElement((containerEl: HTMLElement) => {
-					return new CheckboxComponent(containerEl);
+					return new ToggleComponent(containerEl).setValue(constant.range != undefined);
 				})
 				.element!;
 
-			let dynamicEdit = containerEl.createDiv();
-			let constantRange = constant.range ?? { min: -5, max: 5, step: 0.1 };
+			const dynamicEdit = containerEl.createDiv();
+			const constantRange = constant.range ?? { min: -5, max: 5, step: 0.1 };
 			new LabeledComponent(dynamicEdit)
 				.setLabel('Min:')
 				.setElement((containerEl: HTMLElement) => {
@@ -171,7 +182,7 @@ export class VisualEditor extends Modal {
 					return new NumberComponent(containerEl).setNumber(constantRange.step).onNumberChange((value: number) => constantRange.step = value);
 				});
 
-			checkbox.onChange((value: boolean) => {
+			toggle.onChange((value: boolean) => {
 				if (value) {
 					dynamicEdit.removeAttribute('hidden');
 				} else {
@@ -184,10 +195,10 @@ export class VisualEditor extends Modal {
 			}
 		}
 
-		let constantDefs = new ListComponent(rootEl)
+		const constantDefs = new ListComponent(rootEl)
 			.onAdd((containerEl: HTMLElement) => {
-				let defaultNames = ['a', 'b', 'c', 'd'];
-				let constant = { name: defaultNames[plotEdit.constants.length % defaultNames.length], value: 0 } as ConstantConfig;
+				const defaultNames = ['a', 'b', 'c', 'd'];
+				const constant = { name: defaultNames[plotEdit.constants.length % defaultNames.length], value: 0 } as ConstantConfig;
 				plotEdit.constants.push(constant);
 				constructConstantEdit(containerEl, constant);
 			})
@@ -196,14 +207,14 @@ export class VisualEditor extends Modal {
 		// Add existing constants to UI
 		for (let i = 0; i < plotEdit.constants.length; i++) {
 			constantDefs.addDynamicElement((containerEl: HTMLElement) => {
-				let constant = plotEdit.constants[i]!;
+				const constant = plotEdit.constants[i]!;
 				constructConstantEdit(containerEl, constant);
 			});
 		}
 	}
 
 	private generateAxisOptionsEditor(containerEl: HTMLElement, name: string, config: AxisOptions) {
-		let axisOptionsContainer = containerEl.createDiv();
+		const axisOptionsContainer = containerEl.createDiv({ cls: 'graphpaper-vedit-subsection' });
 		axisOptionsContainer.setText(name);
 		new LabeledComponent(axisOptionsContainer)
 			.setLabel('Min:')
@@ -223,18 +234,18 @@ export class VisualEditor extends Modal {
 		new LabeledComponent(axisOptionsContainer)
 			.setLabel('Disable zoom:')
 			.setElement((containerEl: HTMLElement) => {
-				return new CheckboxComponent(containerEl).setValue(config.disableZoom).onChange((value: boolean) => config.disableZoom = value);
+				return new ToggleComponent(containerEl).setValue(config.disableZoom).onChange((value: boolean) => config.disableZoom = value);
 			});
 		new LabeledComponent(axisOptionsContainer)
 			.setLabel('Autorange:')
 			.setElement((containerEl: HTMLElement) => {
-				return new CheckboxComponent(containerEl).setValue(config.autoRange).onChange((value: boolean) => config.autoRange = value);
+				return new ToggleComponent(containerEl).setValue(config.autoRange).onChange((value: boolean) => config.autoRange = value);
 			});
 	}
 
 	private generateSplitOptionsEditor(containerEl: HTMLElement, config: ViewOptions) {
-		let confUsesCustomSplit = Array.isArray(config.splitPlots);
-		let splitTypeSelector = new LabeledComponent<DropdownComponent>(containerEl)
+		const confUsesCustomSplit = Array.isArray(config.splitPlots);
+		const splitTypeSelector = new LabeledComponent<DropdownComponent>(containerEl)
 			.setLabel('Split plots:')
 			.setElement((containerEl: HTMLElement) => {
 				return new DropdownComponent(containerEl)
@@ -247,8 +258,8 @@ export class VisualEditor extends Modal {
 			})
 			.element!;
 
-		let customSplitValues: [number, number] = confUsesCustomSplit ? config.splitPlots as [number, number] : [0, 0];
-		let customSplitContainer = containerEl.createDiv();
+		const customSplitValues: [number, number] = confUsesCustomSplit ? config.splitPlots as [number, number] : [0, 0];
+		const customSplitContainer = containerEl.createDiv();
 		if (!confUsesCustomSplit) {
 			customSplitContainer.setAttr('hidden', '');
 		}
@@ -273,14 +284,13 @@ export class VisualEditor extends Modal {
 	}
 
 	private writePlotConfig(plotConfig: PlotConfig) {
-		let yaml = `\`\`\`graphpaper\n${stringifyYaml(plotConfig)}\n\`\`\`\n`;
+		const yaml = `\`\`\`graphpaper\n${stringifyYaml(plotConfig)}\n\`\`\`\n`;
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!view) {
 			return;
 		}
 
 		view.editor.replaceSelection(yaml);
-		this.close();
 	}
 }
 
@@ -292,8 +302,8 @@ class LabeledComponent<T> extends BaseComponent {
 	constructor(containerEl: HTMLElement) {
 		super();
 
-		this.rootEl = containerEl.createDiv();
-		this.label = this.rootEl.createSpan({ cls: 'graphpaper-vedit-label' })
+		this.rootEl = containerEl.createDiv({ cls: 'graphpaper-vedit-label-container' });
+		this.label = this.rootEl.createSpan({ cls: 'graphpaper-vedit-label' });
 	}
 
 	setLabel(text: string): this {
@@ -334,7 +344,7 @@ class NumberComponent extends TextComponent {
 
 	onNumberChange(callback: (value: number) => void) {
 		this.onChange((value: string) => {
-			let numberValue = Number(value);
+			const numberValue = Number(value);
 			if (!isNaN(numberValue)) {
 				callback(numberValue);
 			}
@@ -350,7 +360,7 @@ class ListComponent extends BaseComponent {
 	staticSection: HTMLElement;
 	staticElementCount: number;
 	dynamicSection: HTMLElement;
-	elements: HTMLElement[];
+	dynamicElements: HTMLElement[];
 	addCallback?: (containerEl: HTMLElement) => void;
 	deleteCallback?: (index: number) => void;
 
@@ -358,33 +368,26 @@ class ListComponent extends BaseComponent {
 		super();
 
 		this.rootEl = containerEl.createDiv();
-		this.label = this.rootEl.createSpan();
+		this.label = this.rootEl.createSpan({ cls: 'graphpaper-vedit-label' });
 
-		this.staticSection = this.rootEl.createDiv();
+		const listsContainer = this.rootEl.createDiv({ cls: 'graphpaper-vedit-list' });
+		this.staticSection = listsContainer.createDiv({ cls: 'graphpaper-vedit-list' });
 		this.staticElementCount = 0;
-		this.dynamicSection = this.rootEl.createDiv();
-		this.elements = [];
-		new ButtonComponent(this.rootEl)
-			.setButtonText('+')
+		this.dynamicSection = listsContainer.createDiv({ cls: 'graphpaper-vedit-list' });
+		listsContainer.createDiv();
+		this.dynamicElements = [];
+		const addButton = new ButtonComponent(this.rootEl)
+			.setClass('graphpaper-vedit-list-add')
+			.setIcon('plus')
 			.onClick(() => {
 				if (this.addCallback == null) {
 					return;
 				}
 
-				let container = this.dynamicSection.createDiv();
-				new ButtonComponent(container)
-					.setButtonText('X')
-					.onClick(() => {
-						let index = this.elements.indexOf(container) + this.staticElementCount;
-						if (index != -1) {
-							this.elements.splice(index, 1);
-							this.deleteCallback?.(index);
-						}
-						container.remove();
-					});
-
-				this.addCallback(container.createDiv());
+				const container = this.createDynamicElementSlot();
+				this.addCallback(container);
 			});
+		addButton.buttonEl.createSpan({ text: 'Add' });
 	}
 
 	setText(value: string) {
@@ -394,27 +397,36 @@ class ListComponent extends BaseComponent {
 	}
 
 	addStaticElement(constructor: (containerEl: HTMLElement) => void) {
-		constructor(this.staticSection.createDiv());
+		const row = this.staticSection.createDiv({ cls: 'graphpaper-vedit-list-row' });
+		constructor(row.createDiv({ cls: 'graphpaper-vedit-list-content' }));
 		this.staticElementCount += 1;
 
 		return this;
 	}
 
 	addDynamicElement(constructor: (containerEl: HTMLElement) => void) {
-		let container = this.dynamicSection.createDiv();
-		new ButtonComponent(container)
-			.setButtonText('X')
+		const container = this.createDynamicElementSlot();
+		constructor(container);
+	}
+
+	private createDynamicElementSlot(): HTMLElement {
+		const container = this.dynamicSection.createDiv({ cls: 'graphpaper-vedit-list-row' });
+		const deleteButton = new ExtraButtonComponent(container)
+			.setIcon('x')
 			.onClick(() => {
-				let index = this.elements.indexOf(container) + this.staticElementCount;
+				const index = this.dynamicElements.indexOf(container) + this.staticElementCount;
 				if (index != -1) {
-					this.elements.splice(index, 1);
+					this.dynamicElements.splice(index, 1);
 					this.deleteCallback?.(index);
 				}
 				container.remove();
 			});
 
-		constructor(container.createDiv());
-		this.elements.push(container);
+		deleteButton.extraSettingsEl.addClass('graphpaper-vedit-list-delete');
+
+		this.dynamicElements.push(container);
+
+		return container.createDiv({ cls: 'graphpaper-vedit-list-content' });
 	}
 
 	onAdd(callback: (containerEl: HTMLElement) => void) {
@@ -429,31 +441,4 @@ class ListComponent extends BaseComponent {
 		return this;
 	}
 }
-
-class CheckboxComponent extends BaseComponent {
-	inputEl: HTMLInputElement;
-	changeCallback?: (value: boolean) => void;
-
-	constructor(containerEl: HTMLElement) {
-		super();
-
-		this.inputEl = containerEl.createEl('input', { type: 'checkbox' });
-		this.inputEl.onClickEvent(() => {
-			this.changeCallback?.(this.inputEl.checked);
-		})
-	}
-
-	setValue(value: boolean) {
-		this.inputEl.checked = value;
-
-		return this;
-	}
-
-	onChange(callback: (value: boolean) => void) {
-		this.changeCallback = callback;
-
-		return this;
-	}
-}
-
 
