@@ -32,12 +32,20 @@ export class VisualEditor extends Modal {
 			.setValue(this.plotEdit.type);
 
 		let dummyContainer = this.contentEl.createDiv();
-		let funcEditorContainer = this.generateFuncEditor(dummyContainer, this.plotEdit);
+		let funcEditorContainer = this.generateFuncEditor(dummyContainer);
 
 		dropdown.onChange((value: string) => {
 			this.plotEdit.type = value as typeof this.plotEdit.type;
+			if (value === '2D') {
+				this.plotEdit.yMin = undefined;
+				this.plotEdit.yMax = undefined;
+			} else {
+				this.plotEdit.yMin = this.plotEdit.yMin ?? -5;
+				this.plotEdit.yMax = this.plotEdit.yMax ?? 5;
+			}
+
 			funcEditorContainer.remove();
-			funcEditorContainer = this.generateFuncEditor(dummyContainer, this.plotEdit);
+			funcEditorContainer = this.generateFuncEditor(dummyContainer);
 		});
 
 		new ButtonComponent(this.contentEl)
@@ -53,56 +61,98 @@ export class VisualEditor extends Modal {
 		window.requestAnimationFrame(() => this.modalEl.focus());
 	}
 
-	private generateFuncEditor(containerEl: HTMLElement, plotEdit: PlotConfig): HTMLDivElement {
-		if (plotEdit.type == '2D') {
-			return this.generate2DFuncEditor(containerEl, plotEdit);
+	private generateFuncEditor(containerEl: HTMLElement): HTMLDivElement {
+		if (this.plotEdit.type == '2D') {
+			return this.generate2DFuncEditor(containerEl);
 		}
 
-		return this.generate3DFuncEditor(containerEl, plotEdit);
+		return this.generate3DFuncEditor(containerEl);
 	}
 
-	private generate2DFuncEditor(containerEl: HTMLElement, plotEdit: PlotConfig): HTMLDivElement {
+	private generate2DFuncEditor(containerEl: HTMLElement): HTMLDivElement {
 		const rootEl = containerEl.createDiv()
 		const generalContainer = rootEl.createDiv({ cls: 'graphpaper-vedit-section' });
 		generalContainer.setText('General');
 		new LabeledComponent(generalContainer)
 			.setLabel('X min:')
 			.setElement((containerEl: HTMLElement) => {
-				return new NumberComponent(containerEl).setNumber(plotEdit.xMin).onNumberChange((value: number) => plotEdit.xMin = value);
+				return new NumberComponent(containerEl).setNumber(this.plotEdit.xMin).onNumberChange((value: number) => this.plotEdit.xMin = value);
 			});
 
 		new LabeledComponent(generalContainer)
 			.setLabel('X max:')
 			.setElement((containerEl: HTMLElement) => {
-				return new NumberComponent(containerEl).setNumber(plotEdit.xMax).onNumberChange((value: number) => plotEdit.xMax = value);
+				return new NumberComponent(containerEl).setNumber(this.plotEdit.xMax).onNumberChange((value: number) => this.plotEdit.xMax = value);
 			});
 
 		new LabeledComponent(generalContainer)
 			.setLabel('Sample count:')
 			.setElement((containerEl: HTMLElement) => {
-				return new NumberComponent(containerEl).setNumber(plotEdit.sampleCountPerAxis).onNumberChange((value: number) => plotEdit.sampleCountPerAxis = value);
+				return new NumberComponent(containerEl).setNumber(this.plotEdit.sampleCountPerAxis).onNumberChange((value: number) => this.plotEdit.sampleCountPerAxis = value);
 			});
 
 
-		this.generateFunctionDefsEditor(generalContainer, plotEdit);
-		this.generateConstantsEditor(rootEl, plotEdit)
+		this.generateFunctionDefsEditor(generalContainer);
+		this.generateConstantsEditor(rootEl)
 
 		const optionsContainer = rootEl.createDiv({ cls: 'graphpaper-vedit-section' });
 		optionsContainer.setText('Options');
-		this.generateAxisOptionsEditor(optionsContainer, 'X axis', plotEdit.options.view.xAxis);
-		this.generateAxisOptionsEditor(optionsContainer, 'Y axis', plotEdit.options.view.yAxis);
-		this.generateSplitOptionsEditor(optionsContainer, plotEdit.options.view);
+		this.generateAxisOptionsEditor(optionsContainer, 'X axis', this.plotEdit.options.view.xAxis);
+		this.generateAxisOptionsEditor(optionsContainer, 'Y axis', this.plotEdit.options.view.yAxis);
+		this.generateSplitOptionsEditor(optionsContainer, this.plotEdit.options.view);
 
 		return rootEl;
 	}
 
-	private generate3DFuncEditor(parentContainer: HTMLElement, plotEdit: PlotConfig): HTMLDivElement {
-		const rootEl = parentContainer.createDiv();
+	private generate3DFuncEditor(containerEl: HTMLElement): HTMLDivElement {
+		const rootEl = containerEl.createDiv()
+		const generalContainer = rootEl.createDiv({ cls: 'graphpaper-vedit-section' });
+		generalContainer.setText('General');
+		new LabeledComponent(generalContainer)
+			.setLabel('X min:')
+			.setElement((containerEl: HTMLElement) => {
+				return new NumberComponent(containerEl).setNumber(this.plotEdit.xMin).onNumberChange((value: number) => this.plotEdit.xMin = value);
+			});
+
+		new LabeledComponent(generalContainer)
+			.setLabel('X max:')
+			.setElement((containerEl: HTMLElement) => {
+				return new NumberComponent(containerEl).setNumber(this.plotEdit.xMax).onNumberChange((value: number) => this.plotEdit.xMax = value);
+			});
+
+		new LabeledComponent(generalContainer)
+			.setLabel('Y min:')
+			.setElement((containerEl: HTMLElement) => {
+				return new NumberComponent(containerEl).setNumber(this.plotEdit.yMin!).onNumberChange((value: number) => this.plotEdit.yMin = value);
+			});
+
+		new LabeledComponent(generalContainer)
+			.setLabel('Y max:')
+			.setElement((containerEl: HTMLElement) => {
+				return new NumberComponent(containerEl).setNumber(this.plotEdit.yMax!).onNumberChange((value: number) => this.plotEdit.yMax = value);
+			});
+
+		new LabeledComponent(generalContainer)
+			.setLabel('Sample count:')
+			.setElement((containerEl: HTMLElement) => {
+				return new NumberComponent(containerEl).setNumber(this.plotEdit.sampleCountPerAxis).onNumberChange((value: number) => this.plotEdit.sampleCountPerAxis = value);
+			});
+
+
+		this.generateFunctionDefsEditor(generalContainer);
+		this.generateConstantsEditor(rootEl)
+
+		const optionsContainer = rootEl.createDiv({ cls: 'graphpaper-vedit-section' });
+		optionsContainer.setText('Options');
+		this.generateAxisOptionsEditor(optionsContainer, 'X axis', this.plotEdit.options.view.xAxis);
+		this.generateAxisOptionsEditor(optionsContainer, 'Y axis', this.plotEdit.options.view.yAxis);
+		this.generateAxisOptionsEditor(optionsContainer, 'Z axis', this.plotEdit.options.view.zAxis);
+		this.generateSplitOptionsEditor(optionsContainer, this.plotEdit.options.view);
 
 		return rootEl;
 	}
 
-	private generateFunctionDefsEditor(containerEl: HTMLElement, plotEdit: PlotConfig) {
+	private generateFunctionDefsEditor(containerEl: HTMLElement) {
 		const constructFunctionEdit = (containerEl: HTMLElement, functionDef: FunctionConfig) => {
 			new LabeledComponent(containerEl)
 				.setLabel('Name:')
@@ -120,28 +170,28 @@ export class VisualEditor extends Modal {
 		const functionDefs = new ListComponent(containerEl)
 			.setText('Function definitions')
 			.addStaticElement((containerEl: HTMLElement) => {
-				constructFunctionEdit(containerEl, plotEdit.functions[0]!);
+				constructFunctionEdit(containerEl, this.plotEdit.functions[0]!);
 			})
 			.onAdd((containerEl: HTMLElement) => {
 				const defaultNames = ['f', 'g', 'h'];
-				const def = { name: defaultNames[plotEdit.functions.length % defaultNames.length], def: 'x' } as FunctionConfig;
-				plotEdit.functions.push(def);
+				const def = { name: defaultNames[this.plotEdit.functions.length % defaultNames.length], def: 'x' } as FunctionConfig;
+				this.plotEdit.functions.push(def);
 
 				constructFunctionEdit(containerEl, def);
 			})
 			.onDelete((index: number) => {
-				plotEdit.functions.splice(index, 1);
+				this.plotEdit.functions.splice(index, 1);
 			});
 
 		// Add existing defs to UI
-		for (let i = 1; i < plotEdit.functions.length; i++) {
+		for (let i = 1; i < this.plotEdit.functions.length; i++) {
 			functionDefs.addDynamicElement((containerEl: HTMLElement) => {
-				constructFunctionEdit(containerEl, plotEdit.functions[i]!);
+				constructFunctionEdit(containerEl, this.plotEdit.functions[i]!);
 			});
 		}
 	}
 
-	private generateConstantsEditor(containerEl: HTMLElement, plotEdit: PlotConfig) {
+	private generateConstantsEditor(containerEl: HTMLElement) {
 		const rootEl = containerEl.createDiv({ cls: 'graphpaper-vedit-section' });
 		rootEl.setText('Constants');
 		const constructConstantEdit = (containerEl: HTMLElement, constant: ConstantConfig) => {
@@ -198,16 +248,16 @@ export class VisualEditor extends Modal {
 		const constantDefs = new ListComponent(rootEl)
 			.onAdd((containerEl: HTMLElement) => {
 				const defaultNames = ['a', 'b', 'c', 'd'];
-				const constant = { name: defaultNames[plotEdit.constants.length % defaultNames.length], value: 0 } as ConstantConfig;
-				plotEdit.constants.push(constant);
+				const constant = { name: defaultNames[this.plotEdit.constants.length % defaultNames.length], value: 0 } as ConstantConfig;
+				this.plotEdit.constants.push(constant);
 				constructConstantEdit(containerEl, constant);
 			})
-			.onDelete((index: number) => plotEdit.constants.splice(index, 1));
+			.onDelete((index: number) => this.plotEdit.constants.splice(index, 1));
 
 		// Add existing constants to UI
-		for (let i = 0; i < plotEdit.constants.length; i++) {
+		for (let i = 0; i < this.plotEdit.constants.length; i++) {
 			constantDefs.addDynamicElement((containerEl: HTMLElement) => {
-				const constant = plotEdit.constants[i]!;
+				const constant = this.plotEdit.constants[i]!;
 				constructConstantEdit(containerEl, constant);
 			});
 		}
@@ -284,7 +334,15 @@ export class VisualEditor extends Modal {
 	}
 
 	private writePlotConfig(plotConfig: PlotConfig) {
-		const yaml = `\`\`\`graphpaper\n${stringifyYaml(plotConfig)}\n\`\`\`\n`;
+		const { functions, constants, options, sampleCountPerAxis, ...general } = plotConfig;
+		const sortedPlotConfig = {
+			...general,
+			sampleCountPerAxis,
+			functions,
+			constants,
+			options
+		};
+		const yaml = `\`\`\`graphpaper\n${stringifyYaml(sortedPlotConfig)}\`\`\`\n`;
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!view) {
 			return;
