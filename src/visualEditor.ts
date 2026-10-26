@@ -308,33 +308,44 @@ export class VisualEditor extends Modal {
 			})
 			.element!;
 
-		const customSplitValues: [number, number] = confUsesCustomSplit ? config.splitPlots as [number, number] : [0, 0];
+		const customSplitValues: [number, number] = confUsesCustomSplit ? config.splitPlots as [number, number] : [1, this.plotEdit.functions.length];
 		const customSplitContainer = containerEl.createDiv();
 		if (!confUsesCustomSplit) {
 			customSplitContainer.setAttr('hidden', '');
 		}
-		new LabeledComponent(customSplitContainer)
+
+		const rowInput = new LabeledComponent<NumberComponent>(customSplitContainer)
 			.setLabel('Rows:')
 			.setElement((containerEl: HTMLElement) => {
-				return new NumberComponent(containerEl).setNumber(customSplitValues[0]).onNumberChange((value: number) => customSplitValues[0] = value);
-			});
-		new LabeledComponent(customSplitContainer)
+				return new NumberComponent(containerEl).setNumber(customSplitValues[1]).onNumberChange((value: number) => customSplitValues[1] = value);
+			}).element!;
+
+		const columnInput = new LabeledComponent<NumberComponent>(customSplitContainer)
 			.setLabel('Columns:')
 			.setElement((containerEl: HTMLElement) => {
-				return new NumberComponent(containerEl).setNumber(customSplitValues[1]).onNumberChange((value: number) => customSplitValues[1] = value);
-			});
+				return new NumberComponent(containerEl).setNumber(customSplitValues[0]).onNumberChange((value: number) => customSplitValues[0] = value);
+			}).element!;
 
 		splitTypeSelector.onChange((value: string) => {
 			if (value != 'custom') {
+				config.splitPlots = value as typeof config.splitPlots;
 				customSplitContainer.setAttr('hidden', '');
 			} else {
+				config.splitPlots = [1, this.plotEdit.functions.length];
+				rowInput.setNumber(config.splitPlots[1]);
+				columnInput.setNumber(config.splitPlots[0]);
 				customSplitContainer.removeAttribute('hidden');
 			}
 		});
 	}
 
 	private writePlotConfig(plotConfig: PlotConfig) {
-		const { functions, constants, options, sampleCountPerAxis, ...general } = plotConfig;
+		let { functions, constants, options, sampleCountPerAxis, ...general } = plotConfig as any;
+		if (Array.isArray(options.view.splitPlots)) {
+			options.view.splitPlots = `${options.view.splitPlots[0]}:${options.view.splitPlots[1]}`;
+		}
+
+		// Reconstruct config to improve YAML readability.
 		const sortedPlotConfig = {
 			...general,
 			sampleCountPerAxis,
