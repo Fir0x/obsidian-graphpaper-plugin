@@ -25,14 +25,26 @@ export abstract class Plot {
 		return this.container;
 	}
 
-	abstract updateConstant(name: string, value: number): void;
-	abstract updateRender(): void;
-
 	release(): void {
 		Plotly.purge(this.container);
 	}
 
+	abstract updateConstant(name: string, value: number): void;
+	abstract updateRender(): void;
+
 	protected abstract generatePlotlyInfos(): [Plotly.Data[], Partial<Plotly.Layout>, Partial<Plotly.Config>];
+	protected updateConstants(updates: ConstantDef[]) {
+		if (this.config.constants == undefined) {
+			return;
+		}
+
+		for (const update of updates) {
+			const constant = this.config.constants.find((value: ConstantDef) => value.name === update.name);
+			if (constant) {
+				constant.value = update.value;
+			}
+		}
+	}
 }
 
 export class PlotOneVar extends Plot {
@@ -90,14 +102,11 @@ export class PlotOneVar extends Plot {
 
 		let constants: ConstantDef[] = [];
 		if (this.config.constants) {
-			for (const constantConfig of this.config.constants) {
-				const constantOverride = constantOverrides?.find((value) => value.name === constantConfig.name);
-				if (constantOverride) {
-					constants.push({ name: constantConfig.name, value: constantOverride.value });
-				} else {
-					constants.push({ name: constantConfig.name, value: constantConfig.value });
-				}
+			if (constantOverrides) {
+				this.updateConstants(constantOverrides);
 			}
+
+			constants = this.config.constants;
 		}
 
 		let interpreter = new MathInterpreterOneVar(constants);
@@ -281,19 +290,16 @@ export class PlotTwoVar extends Plot {
 	private generateFunctionsData(constantOverrides?: ConstantDef[]): [number[], number[], number[][][]] {
 		const xSampleOffset = Math.max(1e-10, (this.config.xMax - this.config.xMin) / this.config.sampleCountPerAxis);
 		const xValues = Array.from({ length: this.config.sampleCountPerAxis + 1 }, (_, i) => this.config.xMin + i * xSampleOffset);
-		const ySampleOffset = Math.max(1e-10, (this.config.yMax - this.config.yMin) / this.config.sampleCountPerAxis);
-		const yValues = Array.from({ length: this.config.sampleCountPerAxis + 1 }, (_, i) => this.config.yMin + i * ySampleOffset);
+		const ySampleOffset = Math.max(1e-10, (this.config.yMax! - this.config.yMin!) / this.config.sampleCountPerAxis);
+		const yValues = Array.from({ length: this.config.sampleCountPerAxis + 1 }, (_, i) => this.config.yMin! + i * ySampleOffset);
 
 		let constants: ConstantDef[] = [];
 		if (this.config.constants) {
-			for (const constantConfig of this.config.constants) {
-				const constantOverride = constantOverrides?.find((value) => value.name === constantConfig.name);
-				if (constantOverride) {
-					constants.push({ name: constantConfig.name, value: constantOverride.value });
-				} else {
-					constants.push({ name: constantConfig.name, value: constantConfig.value });
-				}
+			if (constantOverrides) {
+				this.updateConstants(constantOverrides);
 			}
+
+			constants = this.config.constants;
 		}
 
 		let interpreter = new MathInterpreterTwoVar(constants);
