@@ -317,7 +317,8 @@ export class PlotTwoVar extends Plot {
 			Plotly.update(this.container, {
 				x: [xValues],
 				y: [yValues],
-				z: zValues
+				// @ts-ignore Issue with type expected in the update object
+				z: [zValues]
 			}, structuredClone(this.plotlyLayout), i);
 		}
 	}
