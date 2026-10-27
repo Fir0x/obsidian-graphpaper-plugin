@@ -234,8 +234,10 @@ export class VisualEditor extends Modal {
 
 			toggle.onChange((value: boolean) => {
 				if (value) {
+					constant.range = { min: -5, max: 5, step: 0.1 };
 					dynamicEdit.removeAttribute('hidden');
 				} else {
+					constant.range = undefined;
 					dynamicEdit.setAttr('hidden', '');
 				}
 			});
