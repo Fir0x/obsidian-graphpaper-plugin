@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"id": "graphpaper",
 	"name": "Graphpaper",
-	"version": "0.0.0",
+	"version": "0.2.0",
 	"minAppVersion": "1.12.0",
 	"description": "Plot math graph from code blocks.",
 	"author": "Fir0x",
