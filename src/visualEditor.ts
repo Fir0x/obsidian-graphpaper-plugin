@@ -1,4 +1,4 @@
-import { App, BaseComponent, ButtonComponent, DropdownComponent, ExtraButtonComponent, MarkdownView, Modal, stringifyYaml, TextComponent, ToggleComponent } from 'obsidian';
+import { App, BaseComponent, ButtonComponent, DropdownComponent, ExtraButtonComponent, MarkdownView, Modal, setIcon, stringifyYaml, TextComponent, ToggleComponent } from 'obsidian';
 import { AxisOptions, ConstantConfig, defaultPlotOptions, FunctionConfig, PlotConfig, ViewOptions } from './plotConfigParser';
 
 export class VisualEditor extends Modal {
@@ -95,11 +95,14 @@ export class VisualEditor extends Modal {
 		this.generateFunctionDefsEditor(generalContainer);
 		this.generateConstantsEditor(rootEl)
 
-		const optionsContainer = rootEl.createDiv({ cls: 'graphpaper-vedit-section' });
-		optionsContainer.setText('Options');
-		this.generateAxisOptionsEditor(optionsContainer, 'X axis', this.plotEdit.options.view.xAxis);
-		this.generateAxisOptionsEditor(optionsContainer, 'Y axis', this.plotEdit.options.view.yAxis);
-		this.generateSplitOptionsEditor(optionsContainer, this.plotEdit.options.view);
+		new CollapsibleComponent(rootEl)
+			.setText('Options')
+			.setElement((containerEl: HTMLElement) => {
+				const optionsContainer = containerEl.createDiv({ cls: 'graphpaper-vedit-section' });
+				this.generateAxisOptionsEditor(optionsContainer, 'X axis', this.plotEdit.options.view.xAxis);
+				this.generateAxisOptionsEditor(optionsContainer, 'Y axis', this.plotEdit.options.view.yAxis);
+				this.generateSplitOptionsEditor(optionsContainer, this.plotEdit.options.view);
+			});
 
 		return rootEl;
 	}
@@ -142,12 +145,15 @@ export class VisualEditor extends Modal {
 		this.generateFunctionDefsEditor(generalContainer);
 		this.generateConstantsEditor(rootEl)
 
-		const optionsContainer = rootEl.createDiv({ cls: 'graphpaper-vedit-section' });
-		optionsContainer.setText('Options');
-		this.generateAxisOptionsEditor(optionsContainer, 'X axis', this.plotEdit.options.view.xAxis);
-		this.generateAxisOptionsEditor(optionsContainer, 'Y axis', this.plotEdit.options.view.yAxis);
-		this.generateAxisOptionsEditor(optionsContainer, 'Z axis', this.plotEdit.options.view.zAxis);
-		this.generateSplitOptionsEditor(optionsContainer, this.plotEdit.options.view);
+		new CollapsibleComponent(rootEl)
+			.setText('Options')
+			.setElement((containerEl: HTMLElement) => {
+				const optionsContainer = containerEl.createDiv({ cls: 'graphpaper-vedit-section' });
+				this.generateAxisOptionsEditor(optionsContainer, 'X axis', this.plotEdit.options.view.xAxis);
+				this.generateAxisOptionsEditor(optionsContainer, 'Y axis', this.plotEdit.options.view.yAxis);
+				this.generateAxisOptionsEditor(optionsContainer, 'Z axis', this.plotEdit.options.view.zAxis);
+				this.generateSplitOptionsEditor(optionsContainer, this.plotEdit.options.view);
+			});
 
 		return rootEl;
 	}
@@ -508,6 +514,34 @@ class ListComponent extends BaseComponent {
 
 	onDelete(callback: (index: number) => void) {
 		this.deleteCallback = callback;
+
+		return this;
+	}
+}
+
+class CollapsibleComponent<T> extends BaseComponent {
+	rootEl: HTMLDetailsElement;
+	label: HTMLSpanElement;
+	content: HTMLDivElement;
+	element?: T;
+
+	constructor(containerEl: HTMLElement) {
+		super();
+
+		this.rootEl = containerEl.createEl('details', { cls: 'graphpaper-vedit-collapsible' });
+		this.label = this.rootEl.createEl('summary');
+		this.content = this.rootEl.createDiv();
+
+	}
+
+	setText(value: string) {
+		this.label.setText(value);
+
+		return this;
+	}
+
+	setElement(constructor: (containerEl: HTMLElement) => T) {
+		this.element = constructor(this.rootEl);
 
 		return this;
 	}
