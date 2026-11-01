@@ -16,10 +16,10 @@ export class VisualEditor extends Modal {
 				sampleCountPerAxis: 100,
 				functions: [{ name: 'f', def: 'x' }],
 				constants: [],
-				options: defaultPlotOptions
+				options: structuredClone(defaultPlotOptions)
 			};
 		} else {
-			this.plotEdit = defaults;
+			this.plotEdit = structuredClone(defaults);
 		}
 	}
 
