@@ -119,7 +119,7 @@ export class MathParser {
 
 		if (token?.type == Lexer.TokenType.Minus) {
 			++this.index;
-			return { type: AstNodeType.UnaryOp, opType: UnaryOp.Negate, right: this.parseValue() };
+			return { type: AstNodeType.UnaryOp, opType: UnaryOp.Negate, right: this.parsePow() };
 		}
 
 		return this.parseValue();
