@@ -225,17 +225,32 @@ export class VisualEditor extends Modal {
 			new LabeledComponent(dynamicEdit)
 				.setLabel('Min:')
 				.setElement((containerEl: HTMLElement) => {
-					return new NumberComponent(containerEl).setNumber(constantRange.min).onNumberChange((value: number) => constantRange.min = value);
+					return new NumberComponent(containerEl)
+						.setNumber(constantRange.min)
+						.onNumberChange((value: number) => {
+							constantRange.min = value;
+							constant.range = constantRange;
+						});
 				});
 			new LabeledComponent(dynamicEdit)
 				.setLabel('Max:')
 				.setElement((containerEl: HTMLElement) => {
-					return new NumberComponent(containerEl).setNumber(constantRange.max).onNumberChange((value: number) => constantRange.max = value);
+					return new NumberComponent(containerEl)
+						.setNumber(constantRange.max)
+						.onNumberChange((value: number) => {
+							constantRange.max = value;
+							constant.range = constantRange;
+						});
 				});
 			new LabeledComponent(dynamicEdit)
 				.setLabel('Step:')
 				.setElement((containerEl: HTMLElement) => {
-					return new NumberComponent(containerEl).setNumber(constantRange.step).onNumberChange((value: number) => constantRange.step = value);
+					return new NumberComponent(containerEl)
+						.setNumber(constantRange.step)
+						.onNumberChange((value: number) => {
+							constantRange.step = value;
+							constant.range = constantRange;
+						});
 				});
 
 			toggle.onChange((value: boolean) => {
